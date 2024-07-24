@@ -9,7 +9,7 @@ import time
 
 class VisionModule:
     color_ranges = {
-        'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
+        'wall': (np.array([29, 5, 112]), np.array([46, 54, 241])),
         'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
         'yellow': (np.array([29, 177, 244]), np.array([30, 251, 255])),
         'blue': (np.array([81, 0, 0]), np.array([116, 255, 255])),
@@ -40,11 +40,9 @@ class VisionModule:
         crosshair_length = 5
         
         # Draw the vertical line of the crosshair
-        cv2.line(frame, (center_x, center_y - crosshair_length), 
-                (center_x, center_y + crosshair_length), color, thickness)
-        
+
+        cv2.drawMarker(frame, FrameCenter, color, markerType=cv2.MARKER_CROSS, markerSize=10, thickness=2)
         # Draw the horizontal line of the crosshair
-        cv2.line(frame, (center_x - crosshair_length, center_y), (center_x + crosshair_length, center_y), color, thickness)
         return FrameCenter
 
 
@@ -93,6 +91,49 @@ class VisionModule:
         #contoursBlack, _ = cv2.findContours(ItemMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return BlackMask
 
+
+    def findWall(self, imgHSV, imgRGB):
+        # Create masks for the orange color
+        WallMask = cv2.inRange(imgHSV, self.color_ranges['wall'][0], self.color_ranges['wall'][1])
+        
+        # Find contours in the mask
+        contoursWall1, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Check if any contours are found
+        if contoursWall1:
+            # Find the largest contour
+            largest_contour = max(contoursWall1, key=cv2.contourArea)
+            
+            # Create an empty mask and draw the largest contour on it
+            filledWallMask = np.zeros_like(WallMask)
+            cv2.drawContours(filledWallMask, [largest_contour], -1, (255), thickness=cv2.FILLED)
+            
+            # Apply Gaussian blur to the filled mask
+            filledWallMask = cv2.GaussianBlur(filledWallMask, (9, 9), 2)
+            
+            # Use the filled mask to extract the wall image
+            WallImg = cv2.bitwise_and(imgRGB, imgRGB, mask=filledWallMask)
+            
+            # Convert the extracted image to grayscale
+            WallImgGray = cv2.cvtColor(WallImg, cv2.COLOR_BGR2GRAY)
+        else:
+            # No contours found, return original image and empty mask
+            WallImg = np.zeros_like(imgRGB)
+            WallImgGray = np.zeros_like(cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY))
+            filledWallMask = np.zeros_like(WallMask)
+        
+        return WallImg, WallImgGray, filledWallMask
+
+
+    def findMarkers(self, WallImgGray, WallMask):
+        _, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+        markers = cv2.bitwise_and(WallMask, mask)
+        _, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
+        ContoursMarkers, _ = cv2.findContours(mask1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return ContoursMarkers, mask1
+
+
+
     def findItems(self, imgHSV):
         # Create masks for the orange color
         ItemMask1 = cv2.inRange(imgHSV, self.color_ranges['orange1'][0], self.color_ranges['orange1'][1])
@@ -123,10 +164,6 @@ class VisionModule:
         contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursObstacle, ObstacleMask
     
-    def findMarkers(self, imgHSV):
-        BlackMask = cv2.inRange(imgHSV, self.color_ranges['black'][0], self.color_ranges['black'][1])
-        contoursMarkers, _= cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        return contoursMarkers, BlackMask
     # Function to check contour circularity
 
     def MarkerShapeDetection(self, contoursMarkers, output,image):
