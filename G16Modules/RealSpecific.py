@@ -107,7 +107,7 @@ class CamFrameGrabber:
 		
 		# return self.currentFrame.copy()
 		imgFlip = cv2.resize(self.currentFrame, (410, 308))
-		imgRGB = cv2.rotate(self.imgFlip, cv2.ROTATE_180)
+		imgRGB = cv2.rotate(imgFlip, cv2.ROTATE_180)
 		imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)  # Convert to HSV
 		RobotView = imgRGB#.copy()  # Preserve the original image
 		return imgRGB, imgHSV, RobotView
@@ -125,5 +125,5 @@ class CamFrameGrabber:
 
 	def __del__(self):
 		# Release the camera and clean up OpenCV windows
-		self.camera.release()
+		self.camera.stop()
 		cv2.destroyAllWindows()
