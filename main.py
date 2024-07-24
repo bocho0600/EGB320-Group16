@@ -35,8 +35,8 @@ def main(): # Main function
 				robotview, visout = VisionModule.Pipeline()
 				# print(marker_distance, marker_bearing)
 				robotview = NavigationModule.update(robotview, visout)
-
-				VisionModule.ExportImage("RobotView", robotview, FPS = True)
+				
+				# VisionModule.ExportImage("RobotView", robotview, FPS = True)
 
 			Specific.update()
 

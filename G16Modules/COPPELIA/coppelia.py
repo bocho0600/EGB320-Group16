@@ -17,7 +17,7 @@ try:
     elif platform.system() == 'Darwin':
         file_extension = '.dylib'
     else:
-        file_extension = '.so'
+        file_extension = '_Pi.so'
     libfullpath = os.path.join(os.path.dirname(__file__), 'remoteApi' + file_extension)
     libsimx = ct.CDLL(libfullpath)
 except:
@@ -286,8 +286,10 @@ def simxGetVisionSensorImage(clientID, sensorHandle, options, operationMode):
             reso.append(resolution[i])
         array_type = ct.c_ubyte * bytesPerPixel * resolution[0] * resolution[1]
         address = ct.addressof(c_image.contents)
-        image = np.ctypeslib.as_array(array_type.from_address(address))
-
+        image_pointer = np.ctypeslib.as_array(array_type.from_address(address))
+        image = np.array(image_pointer, np.uint8)
+        
+        #del array_type, address, image_pointer, c_image
     return ret, reso, image
 
 def simxSetVisionSensorImage(clientID, sensorHandle, image, options, operationMode):

@@ -23,6 +23,11 @@ class SimSpecific:
 		}
 
 
+    if is_hitl: # hardware in the loop
+        coppelia_server_ip = '192.168.57.29'
+    else:
+        coppelia_server_ip = '127.0.0.1'
+
     # SET SCENE PARAMETERS
     sceneParameters = SceneParameters()
     sceneParameters.bayContents= np.random.random_integers(0,5,(6,4,3)) # Random item in each bay
@@ -55,13 +60,15 @@ class SimSpecific:
     
     @classmethod
     def start(cls):
-        cls.packerBotSim = COPPELIA_WarehouseRobot('127.0.0.1', cls.robotParameters, cls.sceneParameters)
+        cls.packerBotSim = COPPELIA_WarehouseRobot(cls.coppelia_server_ip, cls.robotParameters, cls.sceneParameters)
         cls.packerBotSim.StartSimulator()
         cls.packerBotSim.SetCameraPose(0.1, 0.1, 0)
 
     @classmethod
     def update(cls):
         cls.packerBotSim.UpdateObjectPositions() # needs to be called once at the end of the main code loop
+        if is_hitl:
+            time.sleep(0.4)
 
     @classmethod
     def end(cls):

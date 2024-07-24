@@ -5,7 +5,7 @@ SCREEN_WIDTH = 410
 SCREEN_HEIGHT = 308
 
 is_simulator = True
-
+is_hitl = True
 
 if is_simulator:
 	FOV_HORIZONTAL = 60 * pi/180 # radians
