@@ -125,11 +125,6 @@ class VisionModule:
 
 
 
-    @classmethod
-    def findMarkers(cls,imgHSV):
-        BlackMask = cv2.inRange(imgHSV, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
-        contoursMarkers, MarkerMask = cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        return contoursMarkers, MarkerMask
 
     @classmethod
     def MarkerShapeDetection(cls, contoursMarkers, output, Draw = True):
