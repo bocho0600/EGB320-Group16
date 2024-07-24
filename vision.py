@@ -20,7 +20,7 @@ class VisionModule:
     }
 
 
-    focal_length = 40 #cm
+    focal_length = 30 #cm
     real_circle_diameter = 70 #cm
 
     def __init__(self):
@@ -101,19 +101,12 @@ class VisionModule:
         ObstacleMask = cv2.inRange(imgHSV, self.color_ranges['green'][0], self.color_ranges['green'][1])
         contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursObstacle, ObstacleMask
+    
     def findMarkers(self, imgHSV):
         BlackMask = cv2.inRange(imgHSV, self.color_ranges['black'][0], self.color_ranges['black'][1])
         contoursMarkers, _= cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         return contoursMarkers, BlackMask
     # Function to check contour circularity
-    def is_circular(contour):
-        area = cv2.contourArea(contour)
-        if area == 0:
-            return False
-        perimeter = cv2.arcLength(contour, True)
-        circularity = 4 * np.pi * (area / (perimeter * perimeter))
-        return circularity > 0.7  # Adjust threshold as needed
-
 
     def MarkerShapeDetection(self, contoursMarkers, output,image):
         detected = False
@@ -167,35 +160,64 @@ class VisionModule:
 
 
                 
-    
-    def GetContoursShelf(self, contours, output, colour, text, Draw=True):
-        detected = False
-        center = (0, 0)
-        radius = 0
+        
+    def GetContoursShelf(self, contours, output, colour, text, Draw=True, min_area=1000):
+        detected_centers = []  # List to store the centers of detected shelves
+        
         for contour in contours:
-            if cv2.contourArea(contour) > 1000:
+            if cv2.contourArea(contour) > min_area:
                 # Calculate the contour's center using moments
                 M = cv2.moments(contour)
                 if M['m00'] != 0:  # Avoid division by zero
                     center = (int(M['m10'] / M['m00']), int(M['m01'] / M['m00']))
                 else:
                     center = (0, 0)
-                cv2.putText(output, text, center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
                 if Draw:
                     # Draw the contour
                     cv2.drawContours(output, [contour], -1, colour, 1)
                     
                     # Draw the text at the center of the contour
-                    cv2.putText(output, text, center, 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                    
-                detected = True
-                # If you want to calculate a bounding box
+                    cv2.putText(output, text, center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                # Store the detected center
+                detected_centers.append(center)
 
-        if detected:
-            return center
+        # Return the list of detected centers, or None if no contours are detected
+        if detected_centers:
+            return detected_centers
         else:
             return None
+
+    def GetContoursMarkers(self, contours, output, colour, text, Draw=True, min_area=1000):
+        detected_centers = []  # List to store the centers of detected shelves
+        
+        for contour in contours:
+            if cv2.contourArea(contour) > min_area:
+                # Calculate the contour's center using moments
+                M = cv2.moments(contour)
+                if M['m00'] != 0:  # Avoid division by zero
+                    center = (int(M['m10'] / M['m00']), int(M['m01'] / M['m00']))
+                else:
+                    center = (0, 0)
+
+                if Draw:
+                    # Draw the contour
+                    cv2.drawContours(output, [contour], -1, colour, 1)
+                    
+                    # Draw the text at the center of the contour
+                    cv2.putText(output, text, center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                # Store the detected center
+                detected_centers.append(center)
+
+        # Return the list of detected centers, or None if no contours are detected
+        if detected_centers:
+            return detected_centers
+        else:
+            return None
+
+
         
     def GetContoursObject(self, contours, output, colour, text, Draw=True):
         detected_objects = []  # List to store detected object info
@@ -219,6 +241,81 @@ class VisionModule:
             return detected_objects
         else:
             return None
+
+    def GetContoursObject(self, contours, output, colour, text, Draw=True):
+        detected_objects = []  # List to store detected object info
+        
+        for contour in contours:
+            if cv2.contourArea(contour) > 50:
+                x, y, width, height = cv2.boundingRect(contour)
+                
+                if Draw:
+                    cv2.rectangle(output, (x, y), (x + width, y + height), colour, 1)
+                    cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                # Calculate center
+                x_center, y_center = x + width // 2, y + height // 2
+                
+                # Append this object's properties to the list
+                detected_objects.append((x_center, y_center, height, width))
+        
+        # Return list of detected objects
+        if detected_objects:
+            return detected_objects
+        else:
+            return None
+
+
+    def GetContoursObject(self, contours, output, colour, text, Draw=True):
+        detected_objects = []  # List to store detected object info
+        
+        for contour in contours:
+            if cv2.contourArea(contour) > 50:
+                x, y, width, height = cv2.boundingRect(contour)
+                
+                if Draw:
+                    cv2.rectangle(output, (x, y), (x + width, y + height), colour, 1)
+                    cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                # Calculate center
+                x_center, y_center = x + width // 2, y + height // 2
+                
+                # Append this object's properties to the list
+                detected_objects.append((x_center, y_center, height, width))
+        
+        # Return list of detected objects
+        if detected_objects:
+            return detected_objects
+        else:
+            return None
+
+    def GetContoursMarker(self, contours, output, colour, text, Draw=True):
+        detected_objects = []  # List to store detected object info
+        
+        for contour in contours:
+            if cv2.contourArea(contour) > 50:
+                # Get the minimum enclosing circle for the contour
+                (x_center, y_center), radius = cv2.minEnclosingCircle(contour)
+                x_center, y_center = int(x_center), int(y_center)
+                radius = int(radius)
+                
+                if Draw:
+                    # Draw the circle around the detected object
+                    cv2.circle(output, (x_center, y_center), radius, colour, 2)
+                    
+                    # Draw the text at the center of the circle
+                    cv2.putText(output, text, (x_center, y_center - radius - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                # Append this object's properties to the list (center and radius)
+                detected_objects.append((x_center, y_center, radius))
+        
+        # Return list of detected objects
+        if detected_objects:
+            return detected_objects
+        else:
+            return None
+
 
     
     def GetDistance(self, width, real_width):
