@@ -35,9 +35,12 @@ class VisionModule:
         self.cap.start()
 
     def Capturing(self):
+        kernel = np.ones((2, 2), np.uint8)
         self.t1 = time.time()  # For measuring FPS
         img = self.CaptureImage()  # Capture a single image frame
         imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
+        imgHSV = cv2.erode(imgHSV, kernel, iterations=1)
+        imgHSV = cv2.dilate(imgHSV, kernel, iterations=1)
         robotview = img.copy()  # Preserve the original image
         return img, imgHSV, robotview, self.t1
 
