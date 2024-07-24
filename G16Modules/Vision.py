@@ -2,7 +2,7 @@ import cv2
 import picamera2
 import numpy as np
 import time
-from threading import Thread, Lock
+from threading import Thread, Lock, Condition
 
 from .Globals import *
 #from threading import Thread
@@ -47,15 +47,15 @@ class VisionModule:
         cls.t1 = t2
 
         img, imgHSV = Specific.ConvertImage(frame)
-        robotview = img.copy()  # Preserve the original image
+#        robotview = img.copy()  # Preserve the original image
 
-        return img, imgHSV, robotview
+        return img, imgHSV #, robotview
 
     @classmethod
     def ExportImage(cls, WindowName, view, FPS=False):
         if FPS:
             cv2.putText(view, f'{int(cls.fps)}', (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 100), 2)  # Display the FPS on the screen
-
+        
         cv2.imshow(WindowName, view)
 
     @classmethod
@@ -132,7 +132,7 @@ class VisionModule:
         return contoursMarkers, MarkerMask
 
     @classmethod
-    def MarkerShapeDetection(cls, contoursMarkers, output):
+    def MarkerShapeDetection(cls, contoursMarkers, output, Draw = True):
         detected = False
         shapeCount = 0
         distances = []  # List to store distances for all detected circles
@@ -159,9 +159,10 @@ class VisionModule:
                     xs.append(x_center)
                     ys.append(y_center)
                     
-                    cv2.putText(output, f"Distance: {distance} cm", (x_center, y_center), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (123, 200, 100), 2)
-                    cv2.putText(output, f"Circle: {shapeCount}", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
-                    cv2.circle(output, (int(x_center), int(y_center)), int(radius), (0, 255, 0), 2)
+                    if Draw:
+                        cv2.putText(output, f"Distance: {distance} cm", (x_center, y_center), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (123, 200, 100), 2)
+                        cv2.putText(output, f"Circle: {shapeCount}", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
+                        cv2.circle(output, (int(x_center), int(y_center)), int(radius), (0, 255, 0), 2)
                     detected = True
 
         if detected:
@@ -240,8 +241,8 @@ class VisionModule:
     
     @classmethod
     def GetBearing(cls, x_center):
-        offset_pixels = x_center - cls.frame.shape[0]/ 2
-        return (offset_pixels / cls.frame.shape[0]) * 22.3
+        offset_pixels = x_center - SCREEN_WIDTH/ 2
+        return (offset_pixels / SCREEN_WIDTH) * 22.3
 
 # Define the CamFrameGrabber class
 class CamFrameGrabber:
@@ -254,8 +255,11 @@ class CamFrameGrabber:
         self.currentFrame = np.zeros((height, width, 3), np.uint8)
         self.frameid = 0  # Initialize frame ID
         self.newFrameAvailable = False
+        self.time_of_frame = 0
+        self.fps = 0
         #self.lock = Lock()  # Create a lock for thread safety
-        
+        self.new_frame_condition = Condition()
+
         # Capture the first frame
         self.currentFrame = Specific.CaptureFrame()
 
@@ -272,20 +276,31 @@ class CamFrameGrabber:
                 return
             # Capture frame from the camera
             #with self.lock:
+            with self.new_frame_condition:
+                Specific.CaptureFrameAsync(self.captureImageAsyncSignal)
+                self.new_frame_condition.wait()
+            time.sleep(0.01)
+            
+            
 
-            self.currentFrame = Specific.CaptureFrame()
-            print("new frame captured: %d" % self.frameid)
+    def captureImageAsyncSignal(self, job):
+        with self.new_frame_condition:
+            self.currentFrame = Specific.cam_wait_job(job)
+            t_last = self.time_of_frame
+            self.time_of_frame = time.time()
+            self.fps = 1.0 / (self.time_of_frame - t_last)
+            #print("new frame captured: %d" % self.frameid)
             self.frameid += 1  # Increment the frame ID after capturing each frame
             self.newFrameAvailable = True
-
-    #def captureImageAsyncSignal():
+            self.new_frame_condition.notify()
 
     def getCurrentFrame(self):
         # Return the current frame
         #with self.lock:
-        self.newFrameAvailable = False
-        print("get current frame: %d" % self.frameid)
-        return self.currentFrame
+        with self.new_frame_condition:
+            self.newFrameAvailable = False
+            #print("get current frame: %d" % self.frameid)
+            return self.currentFrame.copy()
 
     def getFrameID(self):
         # Return the current frame ID
