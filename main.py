@@ -14,7 +14,7 @@ def main(): # Main function
 	
 	try:
 		while True:
-			img, imgHSV, robotview = Specific.get_new_image()
+			img, imgHSV, robotview = Specific.get_image()
 			robotview = img
 			
 			DebugDraw = True
@@ -49,36 +49,18 @@ def main(): # Main function
 			# Assuming contoursMarkers is a list of contours found using cv2.findContours
 			contoursMarkers, MarkerMask = VisionModule.findMarkers(imgHSV)
 
-			# Get the list of detected markers' center and dimensions
-			detected_markers = VisionModule.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=DebugDraw)
+			# # Get the list of detected markers' center and dimensions
+			# detected_markers = VisionModule.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=DebugDraw)
 
-			if detected_markers is not None:
-				for marker in detected_markers:
-					x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
-					MarkerAngle = VisionModule.GetBearing(x_MarkerCenter)
-					MarkerDistance = VisionModule.GetDistance(MaHeight, 70)
-					cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-					cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
-					# You can now process each marker as needed
+			# if detected_markers is not None:
+			# 	for marker in detected_markers:
+			# 		x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
+			# 		MarkerAngle = VisionModule.GetBearing(x_MarkerCenter)
+			# 		MarkerDistance = VisionModule.GetDistance(MaHeight, 70)
+			# 		cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+			# 		cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
+			# 		# You can now process each marker as needed
 
-			# start older code
-			# contoursShelf, ShelfMask = VisionModule.findShelf(imgHSV)
-			# xs1, ys1, xs2, ys2 = VisionModule.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "Shelf", Draw = DebugDraw)
-
-
-			# contoursObstacle, ObstacleMask = VisionModule.findObstacle(imgHSV)
-			# x_ObstacleCenter, y_ObstacleCenter  = VisionModule.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obstacle", Draw = DebugDraw)
-			# if x_ObstacleCenter != None:
-			# 	ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter)
-				
-			# contoursLoading, LoadingMask = VisionModule.findLoadingArea(imgHSV)
-			# xl1, yl1, xl2, yl2 = VisionModule.GetContoursShelf(contoursLoading, robotview, (120, 120, 255), "LoadingArea", Draw = DebugDraw)
-
-
-			# contoursMarkers, MarkerMask = VisionModule.findMarkers(imgHSV)
-			# shapeCount, distances, bearings, xs, ys = VisionModule.MarkerShapeDetection(contoursMarkers, robotview, Draw = DebugDraw)
-			# aisleNumber, distance, bearing, x_center, y_center = VisionModule.ProcessAisleMarkers(shapeCount, distances, bearings, xs, ys)
-			# end older code
 
 			VisionModule.ExportImage("RobotView", img, FPS = True)
 

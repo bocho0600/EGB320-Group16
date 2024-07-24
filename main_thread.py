@@ -33,6 +33,7 @@ class CamFrameGrabber:
             self.currentFrame = self.camera.capture_array()
 
       def start(self):
+            self.t1 = time.time()
             Thread(target=self.captureImage, args=()).start()
             return self
 

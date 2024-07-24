@@ -78,7 +78,6 @@ class CamFrameGrabber:
 		self.newFrameAvailable = False
 		self.time_of_frame = 0
 		self.fps = 0
-		self.new_frame_condition = Condition()
 
 		# Capture the first frame
 		self.currentFrame = self.camera.capture_array()
@@ -96,8 +95,7 @@ class CamFrameGrabber:
 				return
 			
 			new_frame = self.camera.capture_array()#RealSpecific.CaptureFrame()
-			with self.new_frame_condition:
-				self.currentFrame = new_frame
+			self.currentFrame = new_frame
 			
 			self.frameid += 1  # Increment the frame ID after capturing each frame
 			self.newFrameAvailable = True
@@ -105,15 +103,14 @@ class CamFrameGrabber:
 
 	def getCurrentFrame(self):
 		# Return the current frame
-		with self.new_frame_condition:
-			self.newFrameAvailable = False
-			
-			# return self.currentFrame.copy()
-			self.imgFlip = cv2.resize(self.currentFrame, (410, 308))
-			imgRGB = cv2.rotate(self.imgFlip, cv2.ROTATE_180)
-			imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)  # Convert to HSV
-			RobotView = imgRGB.copy()  # Preserve the original image
-			return imgRGB, imgHSV, RobotView
+		self.newFrameAvailable = False
+		
+		# return self.currentFrame.copy()
+		self.imgFlip = cv2.resize(self.currentFrame, (410, 308))
+		imgRGB = cv2.rotate(self.imgFlip, cv2.ROTATE_180)
+		imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)  # Convert to HSV
+		RobotView = imgRGB.copy()  # Preserve the original image
+		return imgRGB, imgHSV, RobotView
 
 	def getFrameID(self):
 		# Return the current frame ID
