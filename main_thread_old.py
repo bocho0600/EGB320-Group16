@@ -114,20 +114,20 @@ def main():
                               cv2.putText(RobotView, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
 
                   
-                  # Assuming contoursMarkers is a list of contours found using cv2.findContours
-                  contoursMarkers, MarkerMask = vision.findMarkers(imgHSV)
+                  # # Assuming contoursMarkers is a list of contours found using cv2.findContours
+                  # contoursMarkers, MarkerMask = vision.findMarkers(imgHSV)
 
-                  # Get the list of detected markers' center and dimensions
-                  detected_markers = vision.GetContoursObject(contoursMarkers, RobotView, (0, 255, 255), "Circ", Draw=True)
+                  # # Get the list of detected markers' center and dimensions
+                  # detected_markers = vision.GetContoursObject(contoursMarkers, RobotView, (0, 255, 255), "Circ", Draw=True)
 
-                  if detected_markers is not None:
-                        for marker in detected_markers:
-                              x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
-                              MarkerAngle = vision.GetBearing(x_MarkerCenter, imgRGB)
-                              MarkerDistance = vision.GetDistance(MaHeight, 70)
-                              cv2.putText(RobotView, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-                              cv2.putText(RobotView, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
-                              # You can now process each marker as needed
+                  # if detected_markers is not None:
+                  #       for marker in detected_markers:
+                  #             x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
+                  #             MarkerAngle = vision.GetBearing(x_MarkerCenter, imgRGB)
+                  #             MarkerDistance = vision.GetDistance(MaHeight, 70)
+                  #             cv2.putText(RobotView, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+                  #             cv2.putText(RobotView, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
+                  #             # You can now process each marker as needed
 
                   
                   cam.DisplayFrame(RobotView,frame_id, FPS = True)

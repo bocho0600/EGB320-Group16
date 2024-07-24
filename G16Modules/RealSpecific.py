@@ -106,10 +106,10 @@ class CamFrameGrabber:
 		self.newFrameAvailable = False
 		
 		# return self.currentFrame.copy()
-		self.imgFlip = cv2.resize(self.currentFrame, (410, 308))
+		imgFlip = cv2.resize(self.currentFrame, (410, 308))
 		imgRGB = cv2.rotate(self.imgFlip, cv2.ROTATE_180)
 		imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)  # Convert to HSV
-		RobotView = imgRGB.copy()  # Preserve the original image
+		RobotView = imgRGB#.copy()  # Preserve the original image
 		return imgRGB, imgHSV, RobotView
 
 	def getFrameID(self):

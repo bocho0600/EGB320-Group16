@@ -15,7 +15,7 @@ def main(): # Main function
 	try:
 		while True:
 			img, imgHSV, robotview = Specific.get_image()
-			robotview = img
+			#robotview = img
 			
 			DebugDraw = True
 			
@@ -46,8 +46,8 @@ def main(): # Main function
 					cv2.putText(robotview, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
 
 			
-			# Assuming contoursMarkers is a list of contours found using cv2.findContours
-			contoursMarkers, MarkerMask = VisionModule.findMarkers(imgHSV)
+			# # Assuming contoursMarkers is a list of contours found using cv2.findContours
+			# contoursMarkers, MarkerMask = VisionModule.findMarkers(imgHSV)
 
 			# # Get the list of detected markers' center and dimensions
 			# detected_markers = VisionModule.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=DebugDraw)
@@ -62,7 +62,7 @@ def main(): # Main function
 			# 		# You can now process each marker as needed
 
 
-			VisionModule.ExportImage("RobotView", img, FPS = True)
+			VisionModule.ExportImage("RobotView", robotview, FPS = True)
 
 			if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
 				break
