@@ -12,7 +12,7 @@ class I2C:
 
     def LedWrite(self, number, state):
         # Validate inputs
-        if number not in range(4):
+        if number not in range(4): # LED numbers start from 0 to 3
             print("Invalid LED number. Please choose between 0 and 3.")
             return
 
@@ -51,9 +51,21 @@ class I2C:
             ascii_array = self.string_to_ascii_array(command)
             self.bus.write_i2c_block_data(self.addr, 0, ascii_array)
         except Exception as e:
-            print(f"Error sending servo command: {e}")
-
-
+            print(f"Error sending servo command: {e}")\
+    
+    def DCWrite(self, number, direction, speed):
+        # Validate inputs
+        if number not in range(1, 3): # DC motor numbers start from 1 to 2
+            print(f"Invalid DC number: {number}. Please choose between 1 and 2.")
+            return
+        if speed < 0 or speed > 255:  # Allow any angle within the servo's range
+            print(f"Invalid angle: {speed}. Please choose between 0 and 255.")
+            return
+        if direction not in ["0", "1", "STOP"]:
+            print("Invalid direction. Please choose between 0, 1 or 'S' to STOP.")
+            return
+        command = f"M{number} {direction} {speed}"
+        print(f"Sending command to servo: {command}")
 
 
 
