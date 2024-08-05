@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import time
 import threading
+import sys
 
 from flask_video_streaming.app import WebStreamApp
 from flask_video_streaming.camera_virtual import VirtualCamera
@@ -18,7 +19,7 @@ def run_app():
 
 
 
-def main():
+def main(debug_offline=False):
     color_ranges = {
         'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
         'yellow': (np.array([9, 85, 0]), np.array([19  , 255, 255])),
@@ -65,34 +66,39 @@ def main():
                 
                 for contour in contours:  # Draw bounding rectangles around detected contours
                     if cv2.contourArea(contour) > 500:  # Filter out small contours
-                        print("Item detected")
                         x, y, width, height = cv2.boundingRect(contour) # Take the bounding rectangle of the contour
                         cv2.rectangle(img, (x, y), (x + width, y + height), (0, 255, 0), 2)  # Draw a rectangle
                         cv2.putText(img, "Item", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
                 # Display the original image and the filtered image with rectangles
                 cv2.putText(img, f'{fps:.1f}', (20,30), cv2.FONT_HERSHEY_TRIPLEX ,0.7,(255,0,100),2) # Display the FPS on the screen
-                # cv2.imshow("Robot View", img)
-                # cv2.imshow("Filtered Image", result)
-                # cv2.imshow("Original Image", org)
-
-                print("Sending frame")
-                WebStreamApp.send_frame(cv2.imencode('.jpg', img)[1].tobytes())
                 
+                if debug_offline:
+                    cv2.imshow("Robot View", img)
+                    #cv2.imshow("Filtered Image", result)
+                    #cv2.imshow("Original Image", org)
+                    cv2.waitKey(1)
+                else:                    
+                    #print("Sending frame")
+                    WebStreamApp.send_frame(cv2.imencode('.jpg', img)[1].tobytes())
                 #time.sleep(1)
 
 
         finally:
             camera.stop()
 
+if __name__ == "__main__":
+    if len(sys.argv) >= 2 and sys.argv[1] == "online":
+        thread = threading.Thread(target=main)
+        thread.start()
 
-
-thread = threading.Thread(target=main)
-thread.start()
-
-try:
-    run_app()
-finally:
-    run_camera = False
-    thread.join()
-    print("Stopped.")
+        try:
+            run_app()
+        finally:
+            run_camera = False
+            thread.join()
+            print("Stopped.")
+    else:
+        print("Running Offine")
+        main(True)
+        print("Stopped.")
