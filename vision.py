@@ -102,7 +102,7 @@ while(1):
       Mask = ItemMask | ShelfMask
       robotview, x1, y1, x2, y2 = vision.DrawContours(contoursItem, robotview, (0, 255, 0), "Item")
       robotview, x1, y1, x2, y2 = vision.DrawContours(contoursShelf, robotview, (0, 0, 255), "Shelf")
-      result = cv2.bitwise_and(robotview, robotview, mask=Mask)
+      result = cv2.bitwise_and(img, img, mask=Mask)
 
 
       fps = 1.0/(time.time() - t1)         # calculate frame rate
