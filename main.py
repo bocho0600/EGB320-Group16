@@ -4,6 +4,8 @@ import time
 import vision as vs
 import csv 
 import csvread as csvread
+import picamera2
+from sys import argv
 
 def main(): # Main function
       vision = vs.VisionModule()
@@ -32,4 +34,5 @@ if __name__ == "__main__": # Run the main function
       CSV = csvread.CSVReader('Order_1.csv')
       CSV.read_csv()
       instruction = CSV.RobotInstruction() # Generating robot instructions and print instructions
+
       main()
