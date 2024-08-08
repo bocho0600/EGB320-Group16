@@ -42,18 +42,19 @@ class ObjectType:
 
 
 current_object = ObjectType("default")
-images = []
+imagesRGB = []
+imagesHSV = []
 fnames = []
-images_dict = {}
+images_dictHSV = {}
 
 def show_mask():
-    for image,fname in zip(images,fnames):
+    for imageRGB,imageHSV,fname in zip(imagesRGB,imagesHSV,fnames):
         thresh = current_object.update_thresh()
         if current_object.non_empty:
-            mask = cv2.inRange(image, thresh[0], thresh[1])
-            cv2.imshow("out:"+fname, cv2.bitwise_and(image, image, mask=mask))
+            mask = cv2.inRange(imageHSV, thresh[0], thresh[1])
+            cv2.imshow("out:"+fname, cv2.bitwise_and(imageRGB, imageRGB, mask=mask))
         else:
-            cv2.imshow("out:"+fname, np.zeros(image.shape))
+            cv2.imshow("out:"+fname, np.zeros(imageRGB.shape))
 
         
 
@@ -63,10 +64,10 @@ def onMouseClick(event, x, y, flags, param):
 
         if flags & 1:
             #print(f"IN: {images_dict[param][y,x]}")
-            current_object.add_point_in(images_dict[param][y,x])
+            current_object.add_point_in(images_dictHSV[param][y,x])
         elif flags & 2:
             #print(f"OUT: {images_dict[param][y,x]}")
-            current_object.add_point_out(images_dict[param][y,x])
+            current_object.add_point_out(images_dictHSV[param][y,x])
     
     if event == 4 or event == 5:
         print(f"Recalculate thresh for {current_object.name}")
@@ -75,7 +76,8 @@ def onMouseClick(event, x, y, flags, param):
 def display_thresholds(types):
     print("color_ranges = {")
     for object_type in types:
-        print(f"\t\t'{object_type.name}': (np.array({str([o for o in object_type.thresh_min])}), np.array({str([o for o in object_type.thresh_max])})),")
+        if object_type.non_empty:
+            print(f"\t\t'{object_type.name}': (np.array({str([o for o in object_type.thresh_min])}), np.array({str([o for o in object_type.thresh_max])})),")
     print("}")
    
     
@@ -83,15 +85,20 @@ def display_thresholds(types):
 
 if __name__ == "__main__":
     img_path = "calibrate" #input("Relative path to images: ./")
-    images = []
 
     fnames = [name for name in os.listdir(f"./{img_path}") if name.endswith(".png")]
 
-    for name in fnames:222
-        new_image = cv2.imread(f"./{img_path}/{name}")
-        images.append(new_image)
-        images_dict[name] = new_image
-    print(f"Found {len(images):d} images")
+    for name in fnames:
+
+        new_imageRGB = cv2.imread(f"./{img_path}/{name}")
+        imagesRGB.append(new_imageRGB)
+
+        new_imageHSV = cv2.cvtColor(new_imageRGB, cv2.COLOR_RGB2HSV)
+        imagesHSV.append(new_imageHSV)
+
+        images_dictHSV[name] = new_imageHSV
+
+    print(f"Found {len(imagesRGB):d} images")
 
     T_floor = ObjectType("floor")
     T_wall = ObjectType("wall")
@@ -100,7 +107,7 @@ if __name__ == "__main__":
     T_packing = ObjectType("packing")
 
 
-    for image,fname in zip(images,fnames):
+    for image,fname in zip(imagesRGB,fnames):
         cv2.imshow(fname, image)
         cv2.setMouseCallback(fname, onMouseClick, fname)
         cv2.imshow("out:"+fname, image)
@@ -122,6 +129,3 @@ if __name__ == "__main__":
         elif k == ord('q'):
             display_thresholds(types)
             break
-            if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
-                  break
-        
