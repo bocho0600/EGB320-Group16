@@ -87,7 +87,7 @@ if __name__ == "__main__":
 
     fnames = [name for name in os.listdir(f"./{img_path}") if name.endswith(".png")]
 
-    for name in fnames:
+    for name in fnames:222
         new_image = cv2.imread(f"./{img_path}/{name}")
         images.append(new_image)
         images_dict[name] = new_image
@@ -122,4 +122,6 @@ if __name__ == "__main__":
         elif k == ord('q'):
             display_thresholds(types)
             break
+            if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
+                  break
         
