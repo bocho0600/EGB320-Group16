@@ -27,7 +27,7 @@ class VisionModule:
             cap = picamera2.Picamera2()
             #print the different camera resolutions/modes 
             #the sensor can be configured for
-            print(cap.sensor_modes)
+            #print(cap.sensor_modes) #OPTIONAL
 
             #set a specific configuration, smaller resolution will be faster
             #however will have a cropped field of view

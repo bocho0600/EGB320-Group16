@@ -1,4 +1,13 @@
 import csv
+import cv2
+import time
+
+def calculate_and_display_fps(frame, start_time):
+    """Calculate and display FPS on the given frame."""
+    elapsed_time = time.time() - start_time
+    fps = 1.0 / elapsed_time if elapsed_time > 0 else 0
+    cv2.putText(frame, f'FPS: {int(fps)}', (20, 30), cv2.FONT_HERSHEY_TRIPLEX, 0.7, (255, 255, 100), 2)
+    return fps
 
 class CSVReader:
     def __init__(self, file_name):

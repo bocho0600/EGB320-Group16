@@ -2,17 +2,17 @@ import cv2
 import numpy as np
 import time
 import vision as vision
+import csv 
+import csvread as csvread
 
 def main(): # Main function
       vision = vision.VisionModule()
       cap = vision.initialize_camera()
-      
-      while(1):
 
-            t1 = time.time()                     # for measuring fps
-            
-            img = vision.CaptureImage()          # capture a single image frame (should not modify in advance)
-            robotview = img.copy() # preserve the original image
+      while(1):
+            print(instruction)
+
+            img, robotview, t1 = vision.StartCapturing()
             
             contoursItem, ItemMask = vision.findItems(img)
             contoursShelf, ShelfMask = vision.findShelf(img)
@@ -21,15 +21,17 @@ def main(): # Main function
             robotview, x1, y1, x2, y2 = vision.DrawContours(contoursItem, robotview, (0, 255, 0), "Item")
             robotview, x1, y1, x2, y2 = vision.DrawContours(contoursShelf, robotview, (0, 0, 255), "Shelf")
             result = cv2.bitwise_and(robotview, robotview, mask=Mask)
-            
-            fps = 1.0/(time.time() - t1)         # calculate frame rate
-            cv2.putText(robotview, f'{int(fps)}', (20,30), cv2.FONT_HERSHEY_TRIPLEX ,0.7,(255,255,100),2) # Display the FPS on the screen
+
+            calculate_and_display_fps(robotview, t1)
 
             cv2.imshow("RobotView", robotview)     # Display the obtained frame in a window called "CameraImage"
             if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
                   break
-      
+                  
       cap.close()
 
 if __name__ == "__main__": # Run the main function
-    main()
+      CSV = CSVReader('Order_1.csv')
+      CSV.read_csv()
+      instruction = CSV.RobotInstruction() # Generating robot instructions and print instructions
+      main()
