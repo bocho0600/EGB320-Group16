@@ -45,7 +45,4 @@ class CSVReader:
         
         return self.robot_instruction
 
-if __name__ == "__main__":
-    CSV = CSVReader('Order_1.csv')
-    CSV.read_csv()
-    instruction = CSV.RobotInstruction()
+
