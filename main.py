@@ -17,9 +17,10 @@ def main(): # Main function
             contoursItem, ItemMask = vision.findItems(img)
             contoursShelf, ShelfMask = vision.findShelf(img)
             contoursLoadingArea, LoadingAreaMask = vision.findLoadingArea(img)
-            
-            robotview, ix1, iy1, ix2, iy2 = vision.DrawContours(contoursItem, robotview, (0, 255, 0), "Item")
-            robotview, sx1, sy1, sx2, sy2 = vision.DrawContours(contoursShelf, robotview, (0, 0, 255), "Shelf")
+            Mask = ItemMask | ShelfMask
+            robotview, x1, y1, x2, y2 = vision.DrawContours(contoursItem, robotview, (0, 255, 0), "Item")
+            robotview, x1, y1, x2, y2 = vision.DrawContours(contoursShelf, robotview, (0, 0, 255), "Shelf")
+            result = cv2.bitwise_and(robotview, robotview, mask=Mask)
             
             fps = 1.0/(time.time() - t1)         # calculate frame rate
             cv2.putText(robotview, f'{int(fps)}', (20,30), cv2.FONT_HERSHEY_TRIPLEX ,0.7,(255,255,100),2) # Display the FPS on the screen

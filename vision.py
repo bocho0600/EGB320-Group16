@@ -100,8 +100,10 @@ while(1):
       contoursShelf, ShelfMask = vision.findShelf(img)
       contoursLoadingArea, LoadingAreaMask = vision.findLoadingArea(img)
       Mask = ItemMask | ShelfMask
+
       robotview, x1, y1, x2, y2 = vision.DrawContours(contoursItem, robotview, (0, 255, 0), "Item")
       robotview, x1, y1, x2, y2 = vision.DrawContours(contoursShelf, robotview, (0, 0, 255), "Shelf")
+      
       result = cv2.bitwise_and(robotview, robotview, mask=Mask)
 
 
