@@ -5,6 +5,7 @@ from warehousebot_lib import *
 import numpy as np, cv2
 import time
 from math import cos, sin
+from pfilter import pfilter as pf 
 
 def nothing(x):
     pass
@@ -108,8 +109,6 @@ if __name__ == '__main__':
 		normal_camera = np.matmul(robot_to_camera_rotate , np.array([[0,0,1,1]]).T)[0:3, 0]
 		r_camera = np.matmul(robot_to_camera , np.array([[0,0,0,1]]).T)[0:3, 0]
 
-		current_frame_time = time.time()
-
 		cv2.namedWindow("Raw")
 		cv2.namedWindow("Mask")
 
@@ -118,7 +117,7 @@ if __name__ == '__main__':
 
 			img = convert_image(img)
 			img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
-			#img = cv2.medianBlur(img, 5)
+			
 
 			contour, mask = findFloor(img)
 
