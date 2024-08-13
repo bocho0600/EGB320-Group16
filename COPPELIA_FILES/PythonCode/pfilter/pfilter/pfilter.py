@@ -207,7 +207,7 @@ class ParticleFilter(object):
     def __init__(
         self,
         prior_fn,
-        observe_fn=None,
+        #observe_fn=None,
         resample_fn=None,
         n_particles=200,
         dynamics_fn=None,
@@ -268,7 +268,7 @@ class ParticleFilter(object):
         self.init_filter()
         self.n_eff_threshold = n_eff_threshold
         self.d = self.particles.shape[1]
-        self.observe_fn = observe_fn or identity
+        #self.observe_fn = observe_fn or identity
         self.dynamics_fn = dynamics_fn or identity
         self.noise_fn = noise_fn or identity
         self.weight_fn = weight_fn or squared_error
@@ -292,7 +292,7 @@ class ParticleFilter(object):
         """
         # construct the filter
         new_copy = ParticleFilter(
-            observe_fn=self.observe_fn,
+            #observe_fn=self.observe_fn,
             resample_fn=self.resample_fn,
             n_particles=self.n_particles,
             prior_fn=self.prior_fn,
@@ -403,7 +403,7 @@ class ParticleFilter(object):
         )
 
         # hypothesise observations
-        self.hypotheses = self.observe_fn(self.particles, **kwargs)
+        #self.hypotheses = self.observe_fn(self.particles, **kwargs)
 
         if observed is not None:
             # compute similarity to observations
@@ -415,7 +415,7 @@ class ParticleFilter(object):
                 self.weights
                 * np.array(
                     self.weight_fn(
-                        self.hypotheses.reshape(self.n_particles, -1),
+                        self.particles, #self.hypotheses.reshape(self.n_particles, -1),
                         observed.reshape(1, -1),
                         **kwargs
                     )
@@ -452,14 +452,15 @@ class ParticleFilter(object):
         self.original_particles = np.array(self.particles)
 
         # store mean (expected) hypothesis
-        self.mean_hypothesis = np.sum(self.hypotheses.T * self.weights, axis=-1).T
+        #self.mean_hypothesis = np.sum(self.hypotheses.T * self.weights, axis=-1).T
         self.mean_state = np.sum(self.particles.T * self.weights, axis=-1).T
         self.cov_state = np.cov(self.particles, rowvar=False, aweights=self.weights)
+        self.dispersion = np.trace(self.cov_state)
 
         # store MAP estimate
         argmax_weight = np.argmax(self.weights)
         self.map_state = self.particles[argmax_weight]
-        self.map_hypothesis = self.hypotheses[argmax_weight]
+        #self.map_hypothesis = self.hypotheses[argmax_weight]
         self.original_weights = np.array(self.weights)  # before any resampling
 
         # apply any post-processing
