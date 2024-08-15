@@ -10,10 +10,10 @@ import time
 class VisionModule:
     color_ranges = {
         'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
-        'yellow': (np.array([20, 85, 0]), np.array([32, 255, 255])),
-        'blue': (np.array([90, 126, 58]), np.array([130, 255, 245])),
-        'green': (np.array([40, 90, 0]), np.array([70, 255, 180])),
-        'orange1': (np.array([5, 150, 150]), np.array([20, 255, 255])),
+        'yellow': (np.array([20, 120, 153]), np.array([25, 233, 218])),
+        'blue': (np.array([90, 136, 9]), np.array([120, 255, 94])),
+        'green': (np.array([55, 7, 38]), np.array([100, 137, 88])),
+        'orange1': (np.array([0, 158, 45]), np.array([13, 255, 235])),
         'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
         'black': (np.array([0, 0, 43]), np.array([179, 55, 109]))
     }
@@ -37,8 +37,9 @@ class VisionModule:
     def Capturing(self):
         self.t1 = time.time()  # For measuring FPS
         img = self.CaptureImage()  # Capture a single image frame
+        imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
         robotview = img.copy()  # Preserve the original image
-        return img, robotview, self.t1
+        return img, imgHSV, robotview, self.t1
 
     def ExportImage(self, WindowName, view , FPS = False):
         if FPS:
@@ -47,8 +48,7 @@ class VisionModule:
 
         cv2.imshow(WindowName, view)
         
-    def findItems(self, img):
-        imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
+    def findItems(self, imgHSV):
         # Create masks for the orange color
         ItemMask1 = cv2.inRange(imgHSV, self.color_ranges['orange1'][0], self.color_ranges['orange1'][1])
         ItemMask2 = cv2.inRange(imgHSV, self.color_ranges['orange2'][0], self.color_ranges['orange2'][1])
@@ -56,40 +56,32 @@ class VisionModule:
         contoursItem, _ = cv2.findContours(ItemMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursItem, ItemMask
 
-    def findShelf(self, img):
-        imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
+    def findShelf(self, imgHSV):
         ShelfMask = cv2.inRange(imgHSV, self.color_ranges['blue'][0], self.color_ranges['blue'][1])
         contoursShelf, _ = cv2.findContours(ShelfMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursShelf, ShelfMask
 
-    def findLoadingArea(self, img):
-        imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
+    def findLoadingArea(self, imgHSV):
         LoadingAreaMask = cv2.inRange(imgHSV, self.color_ranges['yellow'][0], self.color_ranges['yellow'][1])
         contoursLoadingArea, _ = cv2.findContours(LoadingAreaMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursLoadingArea, LoadingAreaMask
 
-    def findObstacle(self, img):
-        imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    def findObstacle(self, imgHSV):
         ObstacleMask = cv2.inRange(imgHSV, self.color_ranges['green'][0], self.color_ranges['green'][1])
         contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursObstacle, ObstacleMask
 
-    def DrawContours(self, contours, output, colour, text):
+    def GetContours(self, contours, output, colour, text, Draw = True):
         detected = False
         for contour in contours:
             if cv2.contourArea(contour) > 500:
                 x, y, width, height = cv2.boundingRect(contour)
-                cv2.rectangle(output, (x, y), (x + width, y + height), colour, 2)
-                cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                if Draw:
+                    cv2.rectangle(output, (x, y), (x + width, y + height), colour, 2)
+                    cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 detected = True
         if detected:
             x1, y1, x2, y2 = x, y, x + width, y + height
-            return output, x1, y1, x2, y2
+            return x1, y1, x2, y2
         else:
-            return output, None, None, None, None
-
-
-
-
-
-
+            return  None, None, None, None
