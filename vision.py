@@ -43,7 +43,7 @@ class VisionModule:
         #imgHSV = cv2.erode(imgHSV, kernel, iterations=1)
         #imgHSV = cv2.dilate(imgHSV, kernel, iterations=1)
         robotview = img.copy()  # Preserve the original image
-        return img, imgHSV, robotview, self.t1
+        return img, imgHSV, robotview
 
     def ExportImage(self, WindowName, view, FPS=False):
         if FPS:
@@ -76,10 +76,17 @@ class VisionModule:
         contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursObstacle, ObstacleMask
     
-    def findMarkers(self, imgHSV):
+    def findMarkers(self, imgRGB):
+        imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)
         MarkersMask = cv2.inRange(imgHSV, self.color_ranges['black'][0], self.color_ranges['black'][1])
         contoursMarkers, _ = cv2.findContours(MarkersMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursMarkers, MarkersMask
+    
+    def findWall(self, imgHSV):
+        WallMask = cv2.inRange(imgHSV, self.color_ranges['wall'][0], self.color_ranges['wall'][1])
+        contoursWall, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return contoursWall, WallMask
+
 
     def GetContours(self, contours, output, colour, text, Draw=True):
         detected = False
@@ -93,6 +100,7 @@ class VisionModule:
                 if Draw:
                     # Draw the circle around the object
                     cv2.circle(output, center, radius, colour, 2)
+                    #cv2.drawContours(output, [contour], -1, colour, 2)
                     # Optionally, draw the text near the circle
                     cv2.putText(output, text, (center[0] - radius, center[1] - radius - 10), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
