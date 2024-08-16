@@ -14,22 +14,27 @@ def main(): # Main function
       while(1):
             img,imgHSV,robotview, t1 = vision.Capturing()
             
-            contoursItem, ItemMask = vision.findItems(imgHSV)
-            contoursShelf, ShelfMask = vision.findShelf(imgHSV)
-            contoursLoadingArea, LoadingAreaMask = vision.findLoadingArea(imgHSV)
-            contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
-
-            Mask = ItemMask | ShelfMask
+            #contoursItem, ItemMask = vision.findItems(imgHSV)
+            #contoursShelf, ShelfMask = vision.findShelf(imgHSV)
+            #contoursLoadingArea, LoadingAreaMask = vision.findLoadingArea(imgHSV)
+            #contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
+            contoursMarker, MarkerMask = vision.findMarkers(imgHSV)
+            #Mask = ItemMask | ShelfMask
 
             #xi1, yi1, xi2, yi2 = vision.GetContours(contoursItem, robotview, (0, 255, 0), "Item", Draw = True)
             #xs1, ys1, xs2, ys2 = vision.GetContours(contoursShelf, robotview, (0, 0, 255), "Shelf", Draw = True)
             #xl1, yl1, xl2, yl2 = vision.GetContours(contoursLoadingArea, robotview, (255, 0, 0), "Loading Area", Draw = True)
             #xo1, yo1, xo2, yo2 = vision.GetContours(contoursObstacle, robotview, (0, 255, 255), "Obstacle", Draw = True)
-            
+            xm1, ym1, xm2, ym2, radiusm, marker_count = vision.MarkersContours(contoursMarker, robotview, (255, 255, 0), "Marker", Draw = True)
+            FocalLength = 3.04 #mm
+            MarkerSize = 40 #mm
             #result = cv2.bitwise_and(robotview, robotview, mask=Mask)
-
+            
+            #distance = MarkerSize*FocalLength/radiusm
+            #print(radiusm)
+            #print(marker_count)
             #vision.ExportImage("Masking", result, FPS = False)
-            vision.ExportImage("RobotView", Mask, FPS = True)
+            vision.ExportImage("RobotView", robotview, FPS = True)
             if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
                   break
                   

@@ -10,10 +10,11 @@ import time
 class VisionModule:
     color_ranges = {
         'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
+        'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
         'yellow': (np.array([20, 120, 153]), np.array([25, 233, 218])),
         'blue': (np.array([90, 136, 9]), np.array([120, 255, 94])),
         'green': (np.array([55, 7, 38]), np.array([100, 137, 88])),
-        'orange1': (np.array([0, 158, 45]), np.array([13, 255, 235])),
+        'orange1': (np.array([0, 141, 0]), np.array([98, 255, 255])),
         'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
         'black': (np.array([0, 0, 43]), np.array([179, 55, 109]))
     }
@@ -39,23 +40,24 @@ class VisionModule:
         self.t1 = time.time()  # For measuring FPS
         img = self.CaptureImage()  # Capture a single image frame
         imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
-        imgHSV = cv2.erode(imgHSV, kernel, iterations=1)
-        imgHSV = cv2.dilate(imgHSV, kernel, iterations=1)
+        #imgHSV = cv2.erode(imgHSV, kernel, iterations=1)
+        #imgHSV = cv2.dilate(imgHSV, kernel, iterations=1)
         robotview = img.copy()  # Preserve the original image
         return img, imgHSV, robotview, self.t1
 
-    def ExportImage(self, WindowName, view , FPS = False):
+    def ExportImage(self, WindowName, view, FPS=False):
         if FPS:
-            fps = 1.0/(time.time() - self.t1)         # calculate frame rate
-            cv2.putText(view, f'{int(fps)}', (20,30), cv2.FONT_HERSHEY_SIMPLEX ,0.5,(255,255,100), 2) # Display the FPS on the screen
+            fps = 1.0 / (time.time() - self.t1)  # calculate frame rate
+            cv2.putText(view, f'{int(fps)}', (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 100), 2)  # Display the FPS on the screen
 
         cv2.imshow(WindowName, view)
-        
+
     def findItems(self, imgHSV):
         # Create masks for the orange color
+        #HSV90 = cv2.rotate(imgHSV, cv2.ROTATE_180)
         ItemMask1 = cv2.inRange(imgHSV, self.color_ranges['orange1'][0], self.color_ranges['orange1'][1])
-        ItemMask2 = cv2.inRange(imgHSV, self.color_ranges['orange2'][0], self.color_ranges['orange2'][1])
-        ItemMask = ItemMask1 | ItemMask2  # Combine masks
+        #ItemMask2 = cv2.inRange(HSV90, self.color_ranges['orange2'][0], self.color_ranges['orange2'][1])
+        ItemMask = ItemMask1# | ItemMask2  # Combine masks
         contoursItem, _ = cv2.findContours(ItemMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursItem, ItemMask
 
@@ -73,18 +75,54 @@ class VisionModule:
         ObstacleMask = cv2.inRange(imgHSV, self.color_ranges['green'][0], self.color_ranges['green'][1])
         contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursObstacle, ObstacleMask
+    
+    def findMarkers(self, imgHSV):
+        MarkersMask = cv2.inRange(imgHSV, self.color_ranges['black'][0], self.color_ranges['black'][1])
+        contoursMarkers, _ = cv2.findContours(MarkersMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return contoursMarkers, MarkersMask
 
-    def GetContours(self, contours, output, colour, text, Draw = True):
+    def GetContours(self, contours, output, colour, text, Draw=True):
         detected = False
         for contour in contours:
             if cv2.contourArea(contour) > 500:
-                x, y, width, height = cv2.boundingRect(contour)
+                # Get the minimum enclosing circle
+                (x, y), radius = cv2.minEnclosingCircle(contour)
+                center = (int(x), int(y))
+                radius = int(radius)
+                
                 if Draw:
-                    cv2.rectangle(output, (x, y), (x + width, y + height), colour, 2)
-                    cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    # Draw the circle around the object
+                    cv2.circle(output, center, radius, colour, 2)
+                    # Optionally, draw the text near the circle
+                    cv2.putText(output, text, (center[0] - radius, center[1] - radius - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 detected = True
         if detected:
-            x1, y1, x2, y2 = x, y, x + width, y + height
-            return x1, y1, x2, y2
+            x1, y1, x2, y2 = center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius
+            return x1, y1, x2, y2, 
         else:
-            return  None, None, None, None
+            return None, None, None, None
+        
+    def MarkersContours(self, contours, output, colour, text, Draw=True):
+        detected = False
+        circle_count = 0
+        for contour in contours:
+            if cv2.contourArea(contour) > 500:
+                # Get the minimum enclosing circle
+                (x, y), radius = cv2.minEnclosingCircle(contour)
+                center = (int(x), int(y))
+                radius = int(radius)
+                
+                if Draw:
+                    # Draw the circle around the object
+                    cv2.circle(output, center, radius, colour, 2)
+                    # Optionally, draw the text near the circle
+                    cv2.putText(output, text, (center[0] - radius, center[1] - radius - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    circle_count += 1  # Increment the counter for each circle drawn
+                detected = True
+        if detected:
+            x1, y1, x2, y2 = center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius
+            return x1, y1, x2, y2, radius, circle_count
+        else:
+            return None, None, None, None, None, None
