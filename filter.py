@@ -3,20 +3,19 @@ import numpy as np
 import picamera2
 import time
 
-# MADE BY KELVIN LE, QUT EGB320 GROUP16 
-# StudentID: n11429984
-# Email: minhnguyen.le@qut.edu.au
-
 def nothing(x):
     pass
 
 # Initialize PiCamera
-def initialize_camera(frame_height=320*2, frame_width=240*2, format='XRGB8888'):
+def initialize_camera(self, frame_height=320*2, frame_width=240*2, format='XRGB8888'):
+    # Create a camera object and store it as an instance variable
     cap = picamera2.Picamera2()
-    config = cap.create_video_configuration(main={"format": format, "size": (frame_width, frame_height)})
+    config = self.cap.create_video_configuration(main={"format": format, "size": (frame_height, frame_width)})
     cap.configure(config)
+
+    cap.set_controls({"ExposureTime": 400000, "AnalogueGain": 7.6, "ColourGains": (1.2,2)}, "AWBMode": False)
+    
     cap.start()
-    return cap
 
 # Create a window
 cv2.namedWindow('image')
@@ -39,13 +38,24 @@ hMin = sMin = vMin = hMax = sMax = vMax = 0
 phMin = psMin = pvMin = phMax = psMax = pvMax = 0
 
 # Initialize the camera
-cap = initialize_camera()
+
 
 try:
+    cap = initialize_camera()
     while True:
         # Capture frame-by-frame
         frame = cap.capture_array()
-        frame = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
+
+        # Get current camera settings (metadata)
+        metadata = cap.capture_metadata()
+        exposure_time = metadata.get("ExposureTime", "N/A")
+        awb_mode = metadata.get("AwbMode", "N/A")
+        awb_gains = metadata.get("AwbGains", "N/A")
+
+        # Print the current camera settings
+        print(f"Current Exposure Time: {exposure_time}")
+        print(f"Current AWB Mode: {awb_mode}")
+        print(f"Current AWB Gains: {awb_gains}")
 
         # Get current positions of all trackbars
         hMin = cv2.getTrackbarPos('HMin', 'image')

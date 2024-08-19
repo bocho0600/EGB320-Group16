@@ -1,69 +1,96 @@
 import cv2
-import picamera2
 import numpy as np
-import time
+import picamera2
 
-# Create a camera object
-cap = picamera2.Picamera2()
+def nothing(x):
+    pass
 
-# Print the different camera resolutions/modes the sensor can be configured for
-print(cap.sensor_modes)
+# Initialize PiCamera
+def initialize_camera(frame_height=480, frame_width=480, format='XRGB8888'):
+    cap = picamera2.Picamera2()
+    config = cap.create_video_configuration(main={"format": format, "size": (frame_width, frame_height)})
+    cap.configure(config)
+    cap.start()
+    return cap
 
-# Set a specific configuration
-# Smaller resolution will be faster but will have a cropped field of view
-config = cap.create_video_configuration(main={"format": 'XRGB8888', "size": (320, 240)})
-cap.configure(config)
+# Create a window
+cv2.namedWindow('image')
 
-# Start the camera
-cap.start()
+# Create trackbars for HSV color filtering
+cv2.createTrackbar('HMin', 'image', 0, 179, nothing)
+cv2.createTrackbar('SMin', 'image', 0, 255, nothing)
+cv2.createTrackbar('VMin', 'image', 0, 255, nothing)
+cv2.createTrackbar('HMax', 'image', 0, 179, nothing)
+cv2.createTrackbar('SMax', 'image', 0, 255, nothing)
+cv2.createTrackbar('VMax', 'image', 0, 255, nothing)
 
-# Set up the SimpleBlobDetector
-def setup_blob_detector():
-    params = cv2.SimpleBlobDetector_Params()
-    params.filterByArea = True
-    params.minArea = 100
-    params.filterByCircularity = True
-    params.minCircularity = 0.7
-    params.filterByConvexity = True
-    params.minConvexity = 0.8
-    params.filterByInertia = True
-    params.minInertiaRatio = 0.5
-    detector = cv2.SimpleBlobDetector_create(params)
-    return detector
+# Set default values for Max HSV trackbars
+cv2.setTrackbarPos('HMax', 'image', 179)
+cv2.setTrackbarPos('SMax', 'image', 255)
+cv2.setTrackbarPos('VMax', 'image', 255)
 
-detector = setup_blob_detector()
+# Initialize HSV min/max values
+hMin = sMin = vMin = hMax = sMax = vMax = 0
+phMin = psMin = pvMin = phMax = psMax = pvMax = 0
 
-# Define the orange color range in HSV
-lower_orange = np.array([5, 150, 150])
-upper_orange = np.array([15, 255, 255])
+# Initialize the camera
+cap = initialize_camera()
 
-while True:
-    t1 = time.time()  # For measuring FPS
+try:
+    while True:
+        # Capture frame-by-frame
+        frame = cap.capture_array()
+        frame = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
 
-    frame = cap.capture_array()  # Capture a single image frame
+        # Get current camera settings (metadata)
+        metadata = cap.capture_metadata()
+        exposure_time = metadata.get("ExposureTime", "N/A")
+        awb_mode = metadata.get("AwbMode", "N/A")
+        awb_gains = metadata.get("AwbGains", "N/A")
+        
+        # Get additional camera settings if available
+        analogue_gain = metadata.get("AnalogueGain", "N/A")
+        colour_gains = metadata.get("ColourGains", "N/A")
 
-    # Convert frame to HSV
-    hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        # Print the current camera settings
+        print(f"Current Exposure Time: {exposure_time}")
+        print(f"Current AWB Mode: {awb_mode}")
+        print(f"Current AWB Gains: {awb_gains}")
+        print(f"Current Analogue Gain: {analogue_gain}")
+        print(f"Current Colour Gains: {colour_gains}")
 
-    # Create a mask for the orange color
-    mask = cv2.inRange(hsv_frame, lower_orange, upper_orange)
+        # Get current positions of HSV trackbars
+        hMin = cv2.getTrackbarPos('HMin', 'image')
+        sMin = cv2.getTrackbarPos('SMin', 'image')
+        vMin = cv2.getTrackbarPos('VMin', 'image')
+        hMax = cv2.getTrackbarPos('HMax', 'image')
+        sMax = cv2.getTrackbarPos('SMax', 'image')
+        vMax = cv2.getTrackbarPos('VMax', 'image')
 
-    # Detect blobs
-    keypoints = detector.detect(mask)
-    
-    # Draw detected blobs
-    frame_with_blobs = cv2.drawKeypoints(frame, keypoints, np.array([]), (0, 255, 0), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    
-    # Display the frame with blobs
-    cv2.imshow("CameraImage", frame_with_blobs)
-    
-    # Display FPS
-    fps = 1.0 / (time.time() - t1)
-    print("Frame Rate: ", int(fps), end="\r")
+        # Set minimum and maximum HSV values to display
+        lower = np.array([hMin, sMin, vMin])
+        upper = np.array([hMax, sMax, vMax])
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+        # Convert to HSV format and color threshold
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, lower, upper)
+        result = cv2.bitwise_and(frame, frame, mask=mask)
 
-# Clean up
-cap.close()
-cv2.destroyAllWindows()
+        # Print if there is a change in HSV value
+        if((phMin != hMin) or (psMin != sMin) or (pvMin != vMin) or (phMax != hMax) or (psMax != sMax) or (pvMax != vMax)):
+            print(f"(hMin = {hMin}, sMin = {sMin}, vMin = {vMin}), (hMax = {hMax}, sMax = {sMax}, vMax = {vMax})")
+            phMin = hMin
+            psMin = sMin
+            pvMin = vMin
+            phMax = hMax
+            psMax = sMax
+            pvMax = vMax
+
+        # Display result image
+        cv2.imshow('image', result)
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
+finally:
+    # Release resources
+    cap.close()
+    cv2.destroyAllWindows()

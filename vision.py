@@ -12,7 +12,7 @@ class VisionModule:
         'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
         'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
         'yellow': (np.array([20, 120, 153]), np.array([25, 233, 218])),
-        'blue': (np.array([90, 136, 9]), np.array([120, 255, 94])),
+        'blue': (np.array([102, 55, 35]), np.array([129, 228, 176])),
         'green': (np.array([55, 7, 38]), np.array([100, 137, 88])),
         'orange1': (np.array([0, 141, 0]), np.array([98, 255, 255])),
         'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
@@ -33,6 +33,9 @@ class VisionModule:
         self.cap = picamera2.Picamera2()
         config = self.cap.create_video_configuration(main={"format": format, "size": (frame_height, frame_width)})
         self.cap.configure(config)
+   
+        #self.cap.set_controls({"ExposureTime": 400000, "AnalogueGain": 7.6, "ColourGains": (1.3,2,1.2)})
+        
         self.cap.start()
 
     def Capturing(self):
@@ -43,6 +46,8 @@ class VisionModule:
         #imgHSV = cv2.erode(imgHSV, kernel, iterations=1)
         #imgHSV = cv2.dilate(imgHSV, kernel, iterations=1)
         robotview = img.copy()  # Preserve the original image
+        #metadata = self.cap.capture_metadata()
+        #exposure_time = metadata.get("ExposureTime", "N/A")
         return img, imgHSV, robotview
 
     def ExportImage(self, WindowName, view, FPS=False):
@@ -76,22 +81,12 @@ class VisionModule:
         contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursObstacle, ObstacleMask
     
-    def findMarkers(self, imgRGB):
-        imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)
-        MarkersMask = cv2.inRange(imgHSV, self.color_ranges['black'][0], self.color_ranges['black'][1])
-        contoursMarkers, _ = cv2.findContours(MarkersMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return contoursMarkers, MarkersMask
-    
-    def findWall(self, imgHSV):
-        WallMask = cv2.inRange(imgHSV, self.color_ranges['wall'][0], self.color_ranges['wall'][1])
-        contoursWall, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return contoursWall, WallMask
 
 
-    def GetContours(self, contours, output, colour, text, Draw=True):
+    def GetContoursShelf(self, contours, output, colour, text, Draw=True):
         detected = False
         for contour in contours:
-            if cv2.contourArea(contour) > 500:
+            if cv2.contourArea(contour) > 700:
                 # Get the minimum enclosing circle
                 (x, y), radius = cv2.minEnclosingCircle(contour)
                 center = (int(x), int(y))
@@ -99,7 +94,8 @@ class VisionModule:
                 
                 if Draw:
                     # Draw the circle around the object
-                    cv2.circle(output, center, radius, colour, 2)
+                    #cv2.circle(output, center, radius, colour, 2)
+                    cv2.drawContours(output, contours, -1, colour, 2)
                     #cv2.drawContours(output, [contour], -1, colour, 2)
                     # Optionally, draw the text near the circle
                     cv2.putText(output, text, (center[0] - radius, center[1] - radius - 10), 
@@ -110,6 +106,21 @@ class VisionModule:
             return x1, y1, x2, y2, 
         else:
             return None, None, None, None
+        
+    def GetContoursObject(self, contours, output, colour, text, Draw = True):
+        detected = False
+        for contour in contours:
+            if cv2.contourArea(contour) > 500:
+                x, y, width, height = cv2.boundingRect(contour)
+                if Draw:
+                    cv2.rectangle(output, (x, y), (x + width, y + height), colour, 2)
+                    cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                detected = True
+        if detected:
+            x1, y1, x2, y2 = x, y, x + width, y + height
+            return x1, y1, x2, y2
+        else:
+            return  None, None, None, None
         
     def MarkersContours(self, contours, output, colour, text, Draw=True):
         detected = False
@@ -134,3 +145,30 @@ class VisionModule:
             return x1, y1, x2, y2, radius, circle_count
         else:
             return None, None, None, None, None, None
+        
+    def GetContoursWall(self, contours, output, colour, text, Draw=True):
+        detected = False
+        x1 = y1 = x2 = y2 = None
+        for contour in contours:
+            if cv2.contourArea(contour) > 500:
+                x, y, width, height = cv2.boundingRect(contour)
+                if Draw:
+                    # Draw lines between the coordinates instead of a rectangle
+                    x1, y1 = x, y
+                    x2, y2 = x + width, y + height
+
+                    # Draw lines between the corners of the bounding box
+                    cv2.line(output, (x1, y1), (x2, y1), colour, 2)  # Top edge
+                    cv2.line(output, (x2, y1), (x2, y2), colour, 2)  # Right edge
+                    cv2.line(output, (x2, y2), (x1, y2), colour, 2)  # Bottom edge
+                    cv2.line(output, (x1, y2), (x1, y1), colour, 2)  # Left edge
+
+                    # Optionally, put the text near the first coordinate
+                    cv2.putText(output, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+                    detected = True
+
+        if detected:
+            return x1, y1, x2, y2
+        else:
+            return None, None, None, None
