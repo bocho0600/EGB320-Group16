@@ -408,15 +408,16 @@ class ParticleFilter(object):
         if observed is not None:
             # compute similarity to observations
             # force to be positive
-            if type(observed)==list or  type(observed)==tuple or type(observed)==float or type(observed)==int:
-                observed = np.array(observed, dtype=np.float64)
+            # if type(observed)==list or  type(observed)==tuple or type(observed)==float or type(observed)==int:
+            #     observed = np.array(observed, dtype=np.float64)
 
             weights = np.clip(
                 self.weights
                 * np.array(
                     self.weight_fn(
                         self.particles, #self.hypotheses.reshape(self.n_particles, -1),
-                        observed.reshape(1, -1),
+                        observed,
+                        # observed.reshape(1, -1),
                         **kwargs
                     )
                 ),

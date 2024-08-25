@@ -9,7 +9,7 @@ from pfilter import pfilter as pf
 from scipy.stats import norm, gamma, uniform
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Slider
-
+from mapProcessing import ArenaMap
 
 def nothing(x):
     pass
@@ -62,15 +62,55 @@ def dynamics_fn(x, delta):
 	xp[:,2] = xp[:,2] + delta*xp[:,4]
 	return xp
 
+def w_fun(x):
+	sigma = 3.5
+	ss = sigma**2
+	return np.exp(-ss * x**2)
+
 def weight_fn(states, observation, delta):
 	# states: particle possible states N * D
 	# observation: real observation 1 * H
 	
 	# return weights (how likely each state is to yeild the real observation) N * 1
-	return pf.squared_error(states, observation, sigma_slider.val)
 
-def observation_fn(img, contours):
-	np.array([0.3, 0.3, 0, 0, 0])
+	observation = np.c_[observation, np.zeros((observation.shape[0],1)), np.ones((observation.shape[0],1))]
+	weights = []
+	for state in states:
+		t = state[2]
+		t_rotate = np.array([
+				[cos(t), 0, -sin(t), 0],
+				[        0, 1,    0, 0],
+				[sin(t), 0,  cos(t), 0],
+				[        0, 0,    0, 1]])
+		t_obs = np.matmul(observation, np.transpose(t_rotate))[:, 0:2] + state[0:2]
+		closests = []
+		wf = []
+		for i in range(t_obs.shape[0]):
+			seg, dist = arena.closestSegment(t_obs[i,:], "shelf", state[0:2])
+			closests.append(dist)
+			wf.append(w_fun(dist))
+		
+		weights.append(np.prod(wf))
+
+
+	return weights
+
+def observation_fn(img):
+	n_points = 20
+	scale = SCREEN_WIDTH / n_points
+	squash_view = cv2.resize(img, (n_points, SCREEN_HEIGHT))
+	contour, mask = findFloor(squash_view)
+	
+	mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3,3)))
+	mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((3,3)))
+
+	detection_img = mask - np.roll(mask, 1, 0)
+	coords = np.transpose(np.nonzero(detection_img==255))
+	observation = coords[coords[:,1].argsort()]
+	observation[:,1] = observation[:,1] * scale
+	observation = np.fliplr(observation) # x and y swap
+	return project_point_to_ground(observation)
+	
 
 SCREEN_WIDTH = 320
 SCREEN_HEIGHT = 240
@@ -90,6 +130,8 @@ robotParameters.driveType = 'differential'	# specify if using differential (curr
 columns = ["x", "y", "angle", "speed", "ang_vel"]
 prior_fn = pf.independent_sample([uniform(0, 2).rvs, uniform(0, 2).rvs, lambda x: np.zeros(x), lambda x: np.zeros(x), lambda x: np.zeros(x)])
 
+arena = ArenaMap()
+
 PF = pf.ParticleFilter(
 			prior_fn=prior_fn, 
 			n_particles=200,
@@ -97,7 +139,7 @@ PF = pf.ParticleFilter(
 			noise_fn=lambda x,delta: 
 						pf.gaussian_noise(x, sigmas=[0.025, 0.025, 0.0, 0.0, 0.0]),
 			weight_fn=weight_fn,
-			resample_proportion=0.0,
+			resample_proportion=0.05,
 			column_names = columns)
 
 
@@ -115,8 +157,8 @@ if __name__ == '__main__':
 
 		ANGLE_H = packerBotSim.horizontalViewAngle
 		ANGLE_V = packerBotSim.verticalViewAngle
-		DIST_X = packerBotSim.robotParameters.cameraDistanceFromRobotCenter
-		DIST_Z = packerBotSim.robotParameters.cameraHeightFromFloor
+		DIST_X = 0#packerBotSim.robotParameters.cameraDistanceFromRobotCenter
+		DIST_Z = 0.0752#packerBotSim.robotParameters.cameraHeightFromFloor
 		# tilt = packerBotSim.robotParameters.cameraTilt
 		TILT = 1.5 * 3.1415926535 / 180
 		# tilt is meant to be 0 but it is slightly off in simulator
@@ -173,58 +215,73 @@ if __name__ == '__main__':
 			contour, mask = findFloor(img)
 
 			res = cv2.bitwise_and(img,img,mask = mask)
-			marker_image = np.zeros(shape=res.shape, dtype=np.uint8)
+			projected_image = np.zeros(shape=res.shape, dtype=np.uint8)
 			
+			large_contour = []
 			for cont in contour:
 				if cv2.contourArea(cont) > 500:
-					# npc is array of contour points along the edge (and around the outside) of the object
-					npc = np.array(cont)
-					npc = npc[:,0,:]
+					# # npc is array of contour points along the edge (and around the outside) of the object
+					# npc = np.array(cont)
+					# npc = npc[:,0,:]
 					
 
-					# draw
-					res = cv2.polylines(res, [npc], True, (0, 0, 255), 1) # draw
+					# # draw
+					# res = cv2.polylines(res, [npc], True, (0, 0, 255), 1) # draw
 
-					# project contour onto the ground
-					npc_project = (project_point_to_ground(npc)*200).astype(np.int32)
+					# # project contour onto the ground
+					# npc_project = (project_point_to_ground(npc)*200).astype(np.int32)
 
-					# move to the center of the image (roughly)
-					npc_project = np.array([npc_project[:, 0], npc_project[:, 1]+SCREEN_HEIGHT//2]).T
+					# # move to the center of the image (roughly)
+					# npc_project = np.array([npc_project[:, 0], npc_project[:, 1]+SCREEN_HEIGHT//2]).T
 
-					# draw
-					marker_image = cv2.polylines(marker_image, [npc_project], True, (255,0,0), 2)
+					# # draw
+					# projected_image = cv2.polylines(projected_image, [npc_project], True, (255,0,0), 2)
 					
+					large_contour.append(contour)
 					
-			cv2.imshow("Raw", img)
-			cv2.imshow("Mask", res)
-			cv2.imshow("markers", marker_image)
-			cv2.waitKey(1)
 			
-			packerBotSim.SetTargetVelocities(0, 0)  # forward velocity, rotation
-			packerBotSim.UpdateObjectPositions() # needs to be called once at the end of the main code loop
-
 			
-			observation = observation_fn(img, contour)
+
+			observation = observation_fn(img)
+			# observation = np.array([0.3,0.3,0,0,0])
 			PF.update(observation, delta=delta)
-			print(f"State: {PF.map_state[0:2]}, error {np.sqrt((np.array(PF.map_state - observation) ** 2).sum()):.4f} dispersion {PF.dispersion}")
-			# sigmas.append(sigma_slider.val)
-			# dispersions.append(PF.dispersion)
+			#print(f"State: {PF.map_state[0:2]}, error {np.sqrt((np.array(PF.map_state - observation) ** 2).sum()):.4f} dispersion {PF.dispersion}")
+			#sigmas.append(sigma_slider.val)
+			#dispersions.append(PF.dispersion)
 			# ax.clear()
 			# ax.scatter(PF.particles[:, 0], PF.particles[:, 1])
 
-			# ax.set(xlim=(0, 0.5),
-			# 	ylim=(0, 0.5))
+			# ax.set(xlim=(0, 2),
+			# 	ylim=(0, 2))
+			
+			for i in range(observation.shape[0]):
+				projected_image = cv2.drawMarker(projected_image, (int(observation[i,0]*200), int(observation[i,1]*200+SCREEN_HEIGHT//2)), (255,0,0), cv2.MARKER_CROSS,4)
+			
+			map_image = arena.draw_arena(512)
+			for i in range(PF.particles.shape[0]):
+				map_image = cv2.drawMarker(map_image, (PF.particles[i, 0:2]*256).astype(np.int16), (0,0,255), cv2.MARKER_CROSS,4)
+			
 
-			# plt.show(block=False)
-			# fig.canvas.draw() 
-			# fig.canvas.flush_events() 
+			#cv2.imshow("Raw", img)
+			cv2.imshow("Debug", res)
+			cv2.imshow("Projection", projected_image)
+			cv2.imshow("Localization", map_image)
+			cv2.waitKey(1)
+
+			# plt.show(block=True)
+
+			packerBotSim.SetTargetVelocities(0, 0.0)  # forward velocity, rotation
+			packerBotSim.UpdateObjectPositions() # needs to be called once at the end of the main code loop
+
+			
+
 			# time.sleep(0.1)
 
 	except KeyboardInterrupt as e:
 		# attempt to stop simulator so it restarts and don't have to manually press the Stop button in VREP 
-		packerBotSim.StopSimulator()
+		# packerBotSim.StopSimulator()
 		print("Stop")
 		# fig, ax = plt.subplots()
-		# ax.plot(sigmas)
-		# ax.plot(dispersions)
+		# ax.scatter(sigmas, dispersions)
+		
 		# plt.show(block = True)

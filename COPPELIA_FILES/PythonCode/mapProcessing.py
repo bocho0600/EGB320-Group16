@@ -15,8 +15,8 @@ class ArenaMap:
                                      [0.,0.]]]) # clockwise cause inside is in bounds
 
         # Boundaries anticlockwise cause inside is out of bounds
-        shelf_length = 1.13
-        shelf_depth = 0.15
+        shelf_length = 1.04
+        shelf_depth = 0.125
         sl = []
 
         shelf_1 = np.array([[0.,height-shelf_length],
@@ -37,8 +37,8 @@ class ArenaMap:
         sl.append(shelf_1 + np.array([width-shelf_depth,0.]))
         sl = np.array(sl)
 
-        packing_station_size = 0.6
-        packing_station_flat = 0.3
+        packing_station_size = 0.585
+        packing_station_flat = 0.29
         pl = np.array([[[0.,0.],
                         [packing_station_size,0.],
                         [packing_station_size,packing_station_flat],
@@ -47,7 +47,7 @@ class ArenaMap:
                         [0.,0.]]])
 
 
-        self.shelf_lines = np.flip(sl, 2)
+        self.shelf_lines = np.flip(sl, 2) # I had it the wrong way around
         self.packing_lines = pl
         self.width = width
         self.height = height
@@ -74,7 +74,7 @@ class ArenaMap:
             case "wall":
                 segments = self.wall_lines
             case _:
-                print("invalid type")
+                segments = self.shelf_lines + self.packing_lines + self.wall_lines
                 return None
             
         # Dims: 0=line; 1=start/end; 2=x/y 
@@ -90,14 +90,23 @@ class ArenaMap:
             ds = ds[mask]
             cs = cs[mask]
 
+        # ts is the point from 0 to 1 along the segment which is closest
         ts = (cs * ds).sum(1) / (ds*ds).sum(1)
         ts = np.clip(ts, 0, 1)
-        ps = segments[:, 0, :] + np.array([ts,ts]).T * ds # projections
-        ls = ps - point # vector from projection to point
-        qs = (ls*ls).sum(1) # square distance to segmentps
+
+        # ps is the projections from point onto each segment (closest point on each segment)
+        ps = segments[:, 0, :] + np.array([ts,ts]).T * ds
+
+        # vector from projection (closest point on each segment) to the point
+        ls = ps - point 
+
+        # square distances
+        qs = (ls*ls).sum(1) 
+
         closest_segment = segments[np.argmin(qs)]
+        distance_to = np.sqrt(np.min(qs))
         
-        return closest_segment
+        return closest_segment, distance_to
 
 
     # Finally to get an weight, translate each observed point to the closest VISIBLE line segment of the correct type,
