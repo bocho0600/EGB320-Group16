@@ -12,10 +12,10 @@ class VisionModule:
         'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
         'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
         'yellow': (np.array([20, 120, 153]), np.array([25, 233, 218])),
-        'blue': (np.array([102, 55, 35]), np.array([129, 228, 176])),
-        'green': (np.array([55, 7, 38]), np.array([100, 137, 88])),
-        'orange1': (np.array([0, 141, 0]), np.array([98, 255, 255])),
-        'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
+        'blue': (np.array([102, 0, 0]), np.array([179, 179, 255])),
+        'green': (np.array([30, 8, 49]), np.array([68, 119, 156])),
+        'orange1': (np.array([0, 168, 0]), np.array([20, 255, 255])),
+        #'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
         'black': (np.array([0, 0, 43]), np.array([179, 55, 109]))
     }
 
@@ -34,7 +34,7 @@ class VisionModule:
         config = self.cap.create_video_configuration(main={"format": format, "size": (frame_height, frame_width)})
         self.cap.configure(config)
    
-        #self.cap.set_controls({"ExposureTime": 400000, "AnalogueGain": 7.6, "ColourGains": (1.3,2,1.2)})
+        self.cap.set_controls({"ExposureTime": 21999, "AnalogueGain": 2,  "ColourGains": (1.69,1.45)})
         
         self.cap.start()
 
@@ -46,8 +46,6 @@ class VisionModule:
         #imgHSV = cv2.erode(imgHSV, kernel, iterations=1)
         #imgHSV = cv2.dilate(imgHSV, kernel, iterations=1)
         robotview = img.copy()  # Preserve the original image
-        #metadata = self.cap.capture_metadata()
-        #exposure_time = metadata.get("ExposureTime", "N/A")
         return img, imgHSV, robotview
 
     def ExportImage(self, WindowName, view, FPS=False):
@@ -86,7 +84,7 @@ class VisionModule:
     def GetContoursShelf(self, contours, output, colour, text, Draw=True):
         detected = False
         for contour in contours:
-            if cv2.contourArea(contour) > 700:
+            if cv2.contourArea(contour) > 1000:
                 # Get the minimum enclosing circle
                 (x, y), radius = cv2.minEnclosingCircle(contour)
                 center = (int(x), int(y))

@@ -10,6 +10,8 @@ def initialize_camera(frame_height=480, frame_width=480, format='XRGB8888'):
     cap = picamera2.Picamera2()
     config = cap.create_video_configuration(main={"format": format, "size": (frame_width, frame_height)})
     cap.configure(config)
+    #cap.set_controls({"ExposureTime": 29999, "AnalogueGain": 3.76, "ColourGains": (1.76,1.4)})
+    cap.set_controls({"ExposureTime": 21999, "AnalogueGain": 2,  "ColourGains": (1.69,1.45)})
     cap.start()
     return cap
 
