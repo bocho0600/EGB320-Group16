@@ -79,7 +79,54 @@ class VisionModule:
         contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursObstacle, ObstacleMask
     
+    def findWall(self, imgGray, imgRGB):
+        _, WhiteMask = cv2.threshold(imgGray, 165, 255, cv2.THRESH_BINARY) # Apply thresholding to get white colour filter
+        WallMask = np.zeros_like(imgGray) # Create an empty mask for the wall
+        contours, _ = cv2.findContours(WhiteMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            if cv2.contourArea(contour) > 300 :
+                cv2.drawContours(WallMask, [contour], -1, 255, thickness=cv2.FILLED)
+        # Extract the wall region (WILL NEED TO BE ADJUSTED)
+        WallImage = cv2.bitwise_and(imgRGB, imgRGB, mask=WallMask)
+        WallImage = cv2.cvtColor(WallImage, cv2.COLOR_BGR2GRAY)
+        _, MarkerMask = cv2.threshold(imgGray, 120, 255, cv2.THRESH_BINARY_INV)
+        # Find contours in the MarkerMask
+        contoursMarkers, _ = cv2.findContours(WallImage, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        return WallMask, contoursMarkers, WallImage
 
+    def MarkersDetection(self, contoursMarkers, output, colour, Draw=True):
+        shape_count = 0  # Initialize the shape counter
+        detected_shapes = []  # List to store detected shape information
+        shape = None
+        for contour in contoursMarkers:
+            if cv2.contourArea(contour)>300 and cv2.contourArea(contour) < 1000:  # Skip small contours
+                epsilon = 0.04 * cv2.arcLength(contour, True)  # Calculate the perimeter of the contour
+                # Approximate the contour
+                ShapeContours = cv2.approxPolyDP(contour, epsilon, True)
+                # Determine the number of vertices
+                num_vertices = len(ShapeContours)
+                # Identify the shape based on the number of vertices
+                if num_vertices == 3:
+                    shape = "Triangle"
+                elif num_vertices == 4:
+                    shape = "Square"
+                elif num_vertices > 4 and num_vertices < 8:
+                    shape = "Circle"  # Assuming more than 4 sides is a circle for simplicity
+                else:
+                    shape = "Unknown"
+
+                # Only recognize squares and circles
+                if shape in ["Square", "Circle"]:
+                    shape_count += 1  # Increment the counter
+                    detected_shapes.append((ShapeContours, shape))  # Store shape details
+                    if Draw:
+                        cv2.drawContours(output, [ShapeContours], -1, colour, 3)
+                        x, y = ShapeContours.ravel()[0], ShapeContours.ravel()[1]
+                        cv2.putText(output, shape, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
+
+        # Return all detected shapes and the shape count
+        return detected_shapes, shape_count, shape
+    
 
     def GetContoursShelf(self, contours, output, colour, text, Draw=True):
         detected = False
@@ -120,53 +167,5 @@ class VisionModule:
         else:
             return  None, None, None, None
         
-    def MarkersContours(self, contours, output, colour, text, Draw=True):
-        detected = False
-        circle_count = 0
-        for contour in contours:
-            if cv2.contourArea(contour) > 500:
-                # Get the minimum enclosing circle
-                (x, y), radius = cv2.minEnclosingCircle(contour)
-                center = (int(x), int(y))
-                radius = int(radius)
-                
-                if Draw:
-                    # Draw the circle around the object
-                    cv2.circle(output, center, radius, colour, 2)
-                    # Optionally, draw the text near the circle
-                    cv2.putText(output, text, (center[0] - radius, center[1] - radius - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                    circle_count += 1  # Increment the counter for each circle drawn
-                detected = True
-        if detected:
-            x1, y1, x2, y2 = center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius
-            return x1, y1, x2, y2, radius, circle_count
-        else:
-            return None, None, None, None, None, None
         
-    def GetContoursWall(self, contours, output, colour, text, Draw=True):
-        detected = False
-        x1 = y1 = x2 = y2 = None
-        for contour in contours:
-            if cv2.contourArea(contour) > 500:
-                x, y, width, height = cv2.boundingRect(contour)
-                if Draw:
-                    # Draw lines between the coordinates instead of a rectangle
-                    x1, y1 = x, y
-                    x2, y2 = x + width, y + height
 
-                    # Draw lines between the corners of the bounding box
-                    cv2.line(output, (x1, y1), (x2, y1), colour, 2)  # Top edge
-                    cv2.line(output, (x2, y1), (x2, y2), colour, 2)  # Right edge
-                    cv2.line(output, (x2, y2), (x1, y2), colour, 2)  # Bottom edge
-                    cv2.line(output, (x1, y2), (x1, y1), colour, 2)  # Left edge
-
-                    # Optionally, put the text near the first coordinate
-                    cv2.putText(output, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-                    detected = True
-
-        if detected:
-            return x1, y1, x2, y2
-        else:
-            return None, None, None, None
