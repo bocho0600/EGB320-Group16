@@ -121,7 +121,8 @@ def onMouseClick(event, x, y, flags, param):
     scale = 512/2.0
     if flags & 1:
         point = np.array([x, y]) / scale
-        sexy = (map.closestSegment(point, "shelf",robot_position) * scale).astype(np.int32)
+        closest, dist = map.closestSegment(point, "shelf",robot_position)
+        sexy = (closest * scale).astype(np.int32)
         disp_im = cv2.line(image.copy(), sexy[0, :], sexy[1, :], (0, 0, 255), 2)
         disp_im = cv2.drawMarker(disp_im, (robot_position*scale).astype(np.int32), (0,0,0), 15)
         cv2.imshow("Arena", disp_im)
