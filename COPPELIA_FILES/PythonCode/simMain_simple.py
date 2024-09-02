@@ -23,42 +23,58 @@ PHASE_COLLECT = 0
 PHASE_DROPOFF = 1
 
 class State:
-	
-	def start(self):
-		pass
-
-	def update(self):
-		pass
-
-def State_Wander(State):
 	def __init__(self, packerBotSim):
 		self.pbs = packerBotSim
-		self.found_aisle = False
-		self.wander_bias = 0
+		#self.start()
+	
+	def set_velocity(self, fwd, rot):
+		self.pbs.SetTargetVelocities(fwd, rot)
+
+	def start(self):
+		# override
+		raise NotImplementedError("start should be overidden")
+
+	def update(self):
+		# override
+		raise NotImplementedError("update should be overidden")
+
+class State_Wander(State):
 	
 	def start(self):
 		self.found_aisle = False
 		self.wander_bias = 0
 
 	def update(self):
-		self.pbs.SetTargetVelocities()
+		self.set_velocity(0,0)
 		return STATE_WANDER
 
 
 class RobotStates:
-	def __init__(self):
-		self.current_state = STATE_LOST
+	def __init__(self, packerBotSim):
+		self.current_state = STATE_WANDER
 		self.current_phase = PHASE_COLLECT
-		self.state_o = State_Wander(packerBotSim)
-
+		self.all_states = [None, State_Wander]
+		self.pbs = packerBotSim
 		
+		# Initialise all states in state_o
+		self.state_o = []
+		for state in self.all_states:
+			if state is not None:
+				self.state_o.append(state(self.pbs))
+			else:
+				self.state_o.append(None)
+		
+		self.get_current_state().start()
 
-	def update(self, packerBotSim, itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing):
-		new_state = self.state_o.update()
+	def get_current_state(self):
+		return self.state_o[self.current_state]
+
+	def update(self, itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing):
+		state_c = self.get_current_state()
+		new_state = state_c.update()
 		if new_state != self.current_state:
 			self.current_state = new_state
-			self.state_o = State_Wander(packerBotSim)
-			self.state_o.start()
+			self.get_current_state().start()
 		
 
 
@@ -102,7 +118,7 @@ class RobotStates:
 	# 			# -> STATE_APPROACH_PACKING
 	# 			pass
 	# 		case 8: # STATE_APPROACH_PACKING
-	# 			# Go to the packing station but don't do up it
+	# 			# Go to the packing station but don't go up it
 	# 			# Avoid obstacles
 	# 			# STATE_ASCEND_PACKING
 	# 			pass
@@ -137,7 +153,6 @@ sceneParameters.bayContents[0,3,1] = warehouseObjects.bowl # specify a bowl in t
 robotParameters = RobotParameters()
 robotParameters.driveType = 'differential'	# specify if using differential (currently omni is not supported)
 
-botState = RobotStates()
 
 # MAIN SCRIPT
 if __name__ == '__main__':
@@ -150,7 +165,7 @@ if __name__ == '__main__':
 		packerBotSim.StartSimulator()
 		packerBotSim.SetCameraPose(0.1, 0.1, 0)
 
-		
+		botState = RobotStates(packerBotSim)		
 
 		while True:
 
@@ -163,7 +178,7 @@ if __name__ == '__main__':
 			# print(shelfRangeBearing)
 			# print()
 
-			botState.update(packerBotSim, itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing)
+			botState.update(itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing)
 
 			#packerBotSim.SetTargetVelocities(0, 0)  # forward velocity, rotation
 			packerBotSim.UpdateObjectPositions() # needs to be called once at the end of the main code loop
