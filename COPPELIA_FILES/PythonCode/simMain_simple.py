@@ -25,9 +25,13 @@ PHASE_DROPOFF = 1
 class State:
 	def __init__(self, packerBotSim):
 		self.pbs = packerBotSim
+		self.last_fwd = 0
+		self.last_rot = 0
 		#self.start()
 	
 	def set_velocity(self, fwd, rot):
+		self.last_fwd = fwd
+		self.last_rot = rot
 		self.pbs.SetTargetVelocities(fwd, -rot)
 	
 	def get_image(self):
@@ -39,7 +43,7 @@ class State:
 
 	def expand_safety(self, dist_map):
 		d_theta = np.pi/3 / SCREEN_WIDTH # angle per pixel horizontally
-		radius = 0.15 # how far to stay away from wall
+		radius = 0.20 # how far to stay away from wall
 
 		# left to right
 		dist_map = dist_map.copy()
@@ -77,12 +81,19 @@ class State:
 class State_Wander(State):
 	
 	def start(self):
-		pass
+		self.last_left_dist = 2.0
+		self.last_right_dist = 2.0
+		self.avoid_right = 0
+		self.avoid_left = 0
+		self.left_obstacle_dist = None
+		self.right_obstacle_dist = None
+		self.t_now = time.time()
+		
 
 	def update(self):
-		# t_last = t_now
-		# t_now = time.time()
-		# delta = t_now-t_last
+		t_last = self.t_now
+		self.t_now = time.time()
+		delta = self.t_now-t_last
 
 		img = self.get_image()
 		
@@ -160,7 +171,7 @@ class State_Wander(State):
 			projected_floor = projected_floor[mask]
 			floor_contour = floor_contour[mask]
 
-			
+		if floor_contour is not None and floor_contour.size > 0:
 			# draw
 			res = cv2.polylines(res, [floor_contour], False, (0, 0, 255), 1) # draw
 
@@ -175,21 +186,55 @@ class State_Wander(State):
 					j += 1
 				dist_map[i] = dist_real[j]
 
+			# Forced Avoidance
+			left_dist = dist_map[0]
+			right_dist = dist_map[-1]
+			
+			sudden_left = left_dist - self.last_left_dist
+			sudden_right = right_dist - self.last_right_dist
+			
+			# if we were within 0.3m of an obstacle and cant see it anymore
+			# (edge distance increased by 0.2 or more,  *this only works for shelves, if there are narrow obstacles it will be weird* )
+			if sudden_left > 0.2 and self.last_left_dist < 0.3 and self.last_fwd > 0 and self.last_rot > 0:
+				print("AVOID LEFT!")
+				self.avoid_left = self.last_left_dist * sin(np.pi/3)+0.2
+				self.left_obstacle_dist = self.last_left_dist
+			if sudden_right > 0.2 and self.last_right_dist < 0.3 and self.last_fwd > 0 and self.last_rot < 0:
+				print("AVOID RIGHT!")
+				self.avoid_right = self.last_right_dist * sin(np.pi/3)+0.2
+				self.right_obstacle_dist = self.last_right_dist
+
+			# if we are avoiding an obstacle just act like it is still there on the edge
+			if self.avoid_left > 0:
+				res = cv2.putText(res, "A", (20,20), 0, 1, (0,0,255), 2)
+				dist_map[0] = self.left_obstacle_dist
+			if self.avoid_right > 0:
+				res = cv2.putText(res, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+				dist_map[-1] = self.right_obstacle_dist
+			
+			self.last_left_dist = left_dist
+			self.last_right_dist = right_dist
+
+
 			safety_map = self.expand_safety(dist_map)
 			
 			res = cv2.polylines(res, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 			res = cv2.polylines(res, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
 
 			MAX_ROBOT_VEL = 0.2 # m/s
-			MAX_ROBOT_ROT = np.pi/3 # rad/s
-			ROTATIONAL_BIAS = 0.95 #tweak this parameter to be more or less aggressive with turns vs straight
-			Kp = 0.8 # proportional term. beware if its too high we will try to go backwards for sharp turns
+			
+			ROTATIONAL_BIAS = 0.9 #tweak this parameter to be more or less aggressive with turns vs straight
+			Kp = 1.0 # proportional term. beware if its too high we will try to go backwards for sharp turns
+			MAX_ROBOT_ROT = np.pi/3 * Kp # rad/s
 
 			if safety_map.max() == safety_map.min():
 				# no safe path- turn and dont move forward
-				forward_vel = 0
+				
 				goal_error = (dist_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * np.pi/3
 				rotational_vel = goal_error*Kp
+
+				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
+				forward_vel = 0
 
 				res = cv2.drawMarker(res, (dist_map.argmax(), int(SCREEN_HEIGHT - dist_map.max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
@@ -200,10 +245,17 @@ class State_Wander(State):
 				forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
 
 				res = cv2.drawMarker(res, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
-
+			
+			
 		else:
 			rotational_vel = np.pi/2
 			forward_vel = 0
+			left_dist = 0.2
+			right_dist = 0.2
+			self.last_left_dist = 0.2
+			self.last_right_dist = 0.2
+			sudden_left = 0
+			sudden_right = 0
 		
 		
 		
@@ -211,7 +263,14 @@ class State_Wander(State):
 		cv2.imshow("res", res)
 		cv2.waitKey(1)
 
-		print(forward_vel, rotational_vel)
+		print(f"{left_dist:.2f}, {right_dist:.2f}")
+
+		if self.avoid_right>0:
+			self.avoid_right -= forward_vel * delta
+		if self.avoid_left>0:
+			self.avoid_left -= forward_vel * delta
+		
+
 		self.set_velocity(forward_vel/5,rotational_vel/5)
 		return STATE_WANDER
 
