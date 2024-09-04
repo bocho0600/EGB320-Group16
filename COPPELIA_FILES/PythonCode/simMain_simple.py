@@ -86,56 +86,84 @@ class State_Wander(State):
 
 		img = self.get_image()
 		
+		# exclude small areas and consider in order of size
 		contour, mask = findFloor(img)
-		
+		contour = [cont for cont in contour if cv2.contourArea(cont) > 200]
+		contour = sorted(contour, key=lambda cont: -cv2.contourArea(cont))
+
 		res = img.copy()
 		#res = cv2.bitwise_and(img, img, mask=mask)
 		
 		floor_contour = None
 		xmax = -1
-		for cont in contour:
-			if cv2.contourArea(cont) > 200:
-				bounds = cv2.boundingRect(cont) # left, top, width, height
-				if bounds[0] < xmax:
-					# only consider new contours to the right of what we have already seen
-					continue
+		xmin = SCREEN_WIDTH+1
+		for i,cont in enumerate(contour):
+			# res = cv2.drawContours(res, cont, -1, (0,255,255),2)
+			# res = cv2.putText(res, str(i), (np.array(cv2.boundingRect(cont)[0:2]) + 0.5*np.array(cv2.boundingRect(cont)[2:])).astype(np.int32), 0, 1, (0,255,255))
+			
+			bounds = cv2.boundingRect(cont) # left, top, width, height
+
+			# only consider new contours strictly outside of what we have already seen
+			# * this means that a contour between two already seen will be excluded! this should be pretty rare though *
+			if bounds[0]+bounds[2] <= xmin:
+				xmin = bounds[0]
+				xmax = max(xmax, bounds[0]+bounds[2])
+			elif bounds[0] >= xmax:
 				xmax = bounds[0] + bounds[2]
+				xmin = min(xmin, bounds[0])
+			else:
+				continue
+			
 
-				# npc is array of contour points along the edge (and around the outside) of the object
-				npc = np.array(cont)
-				npc = npc[:,0,:]
+			# npc is array of contour points along the edge (and around the outside) of the object
+			npc = np.array(cont)
+			npc = npc[:,0,:]
 
-				
-				
-				# discard points on the edge of the screen and sort left to right
-				npc = npc[(npc[:,1] > 0) & (npc[:,1] < SCREEN_HEIGHT-1) & (npc[:,0] > 0) & (npc[:,0] < SCREEN_WIDTH-1), :]
-				npc = npc[np.argsort(npc[:, 0]), :]
+			
+			
+			# discard points on the edge of the screen and sort left to right (if two points are at same x prefer larger y (lower on the screen))
+			# this is so later when we get unique elements the lower one is kept
+			npc = npc[(npc[:,1] > 0) & (npc[:,1] < SCREEN_HEIGHT-1) & (npc[:,0] > 0) & (npc[:,0] < SCREEN_WIDTH-1), :]
+			npc = npc[np.argsort(npc[:, 0] + 1.0-npc[:, 1]/SCREEN_HEIGHT), :]
 
-				if npc.size < 3:
-					continue
+			if npc.size < 3:
+				continue
 
-				# add a 0 point before and after so that the dist map counts blank spaces correctly
-				if npc[0,0] > 1: # any with 0 were removed so first being =1 is acceptable
-					npc = np.r_[[[npc[0,0]-1, SCREEN_HEIGHT-1]], npc]
-				if npc[-1,0] < SCREEN_WIDTH-2:# any with SCREEN_WIDTH-1 were removed so first being =SCREEN_WIDTH-2 is acceptable
-					npc = np.r_[npc, [[npc[-1,0]+1, SCREEN_HEIGHT-1]]]	
+			# this is too annoying to do in the case of multiple contours
+			# add a 0 point before and after so that the dist map counts blank spaces correctly
+			# if npc[0,0] > 1: # any with 0 were removed so first being =1 is acceptable
+			# 	npc = np.r_[[[npc[0,0]-1, SCREEN_HEIGHT-1]], npc]
+			# if npc[-1,0] < SCREEN_WIDTH-2:# any with SCREEN_WIDTH-1 were removed so first being =SCREEN_WIDTH-2 is acceptable
+			# 	npc = np.r_[npc, [[npc[-1,0]+1, SCREEN_HEIGHT-1]]]	
 
-				# draw
-				res = cv2.polylines(res, [npc], False, (0, 0, 255), 1) # draw
-				
-				# append to floor_contour
-				if floor_contour is None:
-					floor_contour = npc
-				else:
-					floor_contour = np.r_[floor_contour, npc]
-				
+			
+			
+			# # append to floor_contour
+			if floor_contour is None:
+				floor_contour = npc
+			else:
+				floor_contour = np.r_[floor_contour, npc]
+
 
 		
 	
 		if floor_contour is not None:
+			# make sure it is sorted from left to right and only keep one point per column. (lower points preferred)	
+			floor_contour = floor_contour[np.unique(floor_contour[:, 0], return_index=True)[1]]
+
+
 			# project contour onto the ground
 			projected_floor = project_point_to_ground(floor_contour)
+
+			# discard points above the horizon
+			mask = projected_floor[:, 0] >= 0
+			projected_floor = projected_floor[mask]
+			floor_contour = floor_contour[mask]
+
 			
+			# draw
+			res = cv2.polylines(res, [floor_contour], False, (0, 0, 255), 1) # draw
+
 			# distances of each point. However each point does not match 1 to 1 with pixels
 			dist_real = np.sqrt(projected_floor[:,0]**2 + projected_floor[:,1]**2)
 			
@@ -285,7 +313,7 @@ def convert_image(img):
 	return cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 0)
 
 color_ranges = {
-            'floor': (np.array([0, 0, 80]), np.array([0, 0, 103])),
+            'floor': (np.array([0, 0, 80]), np.array([0, 0, 135])),
             'wall': (np.array([0, 0, 146]), np.array([30, 1, 255])),
             'blue': (np.array([3, 171, 54]), np.array([3, 175, 112])),
             'black': (np.array([0, 0, 0]), np.array([0, 0, 0])),
