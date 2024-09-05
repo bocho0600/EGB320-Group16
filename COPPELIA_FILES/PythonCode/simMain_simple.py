@@ -5,22 +5,29 @@ from warehousebot_lib import *
 import numpy as np, cv2
 import time
 from math import cos, sin, pi
+from enum import Enum
 
-STATE_LOST = 0
-STATE_WANDER = 1
-STATE_AISLE_DOWN = 2
-STATE_FACE_BAY = 3
-STATE_COLLECT_ITEM = 4
-STATE_FACE_OUT = 5
-STATE_WANDER_OUT = 6
-STATE_FACE_PACKING = 7
-STATE_APPROACH_PACKING = 8
-STATE_ASCEND_PACKING = 9
-STATE_DROP_ITEM = 10
-STATE_DESCEND_PACKING = 11
 
-PHASE_COLLECT = 0
-PHASE_DROPOFF = 1
+STATE = Enum('STATE', [
+	'LOST',
+	'WANDER',
+	'AISLE_DOWN',
+	'FACE_BAY',
+	'COLLECT_ITEM',
+	'FACE_OUT',
+	'WANDER_OUT',
+	'FACE_PACKING',
+	'APPROACH_PACKING',
+	'ASCEND_PACKING',
+	'DROP_ITEM',
+	'DESCEND_PACKING',
+	])
+
+PHASE = Enum('PHASE', [
+	'COLLECT',
+	'DROPOFF'
+	])
+
 
 class Vision:
 	pbs = None
@@ -75,10 +82,19 @@ class Navigation:
 	MAX_ROBOT_ROT = pi/3 * Kp # rad/s
 	RADIUS = 0.2 # how far to stay away from wall
 
+	
+	# For each state define a start and update function stored in this dict
+	state_callbacks = {}
+
+	@classmethod
+	def initialise_callbacks(cls):
+		cls.state_callbacks[STATE.WANDER] = (cls.wander_start, cls.wander_update)
+
 	@classmethod
 	def set_packer_bot(cls, packerBotSim):
 		cls.pbs = packerBotSim
 	
+	#region Utility Functions
 	@classmethod
 	def calculate_view_transforms(cls):
 		#ANGLE_H = packerBotSim.horizontalViewAngle
@@ -302,7 +318,9 @@ class Navigation:
 			cls.avoid_right -= fwd * delta
 		if cls.avoid_left>0:
 			cls.avoid_left -= fwd * delta
+	#endregion
 	
+	#region State Callbacks
 	@classmethod
 	def wander_start(cls):
 		cls.last_left_dist = 2.0
@@ -379,104 +397,42 @@ class Navigation:
 		cls.forced_avoidance_timer_update(forward_vel, delta*8)
 		cls.set_velocity(forward_vel,rotational_vel)
 
-		return STATE_WANDER
-
+		return STATE.WANDER
+	#endregion
 
 class RobotStateMachine:
-	def __init__(self, packerBotSim):
-		# self.current_state = STATE_WANDER
-		# self.current_phase = PHASE_COLLECT
-		# self.all_states = [None, State_Wander]
-		# self.pbs = packerBotSim
-		
-		# # Initialise all states in state_o
-		# self.state_o = []
-		# for state in self.all_states:
-		# 	if state is not None:
-		# 		self.state_o.append(state(self.pbs))
-		# 	else:
-		# 		self.state_o.append(None)
-		
-		# self.get_current_state().start()
-		Navigation.set_packer_bot(packerBotSim)
+
+	# Initial State
+	current_state = STATE.WANDER
+
+	@classmethod
+	def init(cls, packerBotSim):
+		# Initialise vision and navigation 
 		Vision.set_packer_bot(packerBotSim)
-		Navigation.calculate_view_transforms()
-
-		Navigation.wander_start()
-
-	# def get_current_state(self):
-	# 	return self.state_o[self.current_state]
-
-	def update(self):
-		# state_c = self.get_current_state()
-		# new_state = state_c.update()
-		# if new_state != self.current_state:
-		# 	self.current_state = new_state
-		# 	self.get_current_state().start()
-		Navigation.wander_update()
 		
+		Navigation.initialise_callbacks()
+		Navigation.set_packer_bot(packerBotSim)
+		Navigation.calculate_view_transforms()
+		Navigation.state_callbacks[cls.current_state][0]()
 
+	# Call the start function for the current state
+	@classmethod
+	def call_current_start(cls):
+		return Navigation.state_callbacks[cls.current_state][0]()
+	
+	# Call the update function for the current state
+	@classmethod
+	def call_current_update(cls):
+		return Navigation.state_callbacks[cls.current_state][1]()
 
-	# def update(self, packerBotSim, itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing):
-	# 	match self.current_state:
-	# 		case 0: # STATE_LOST
-	# 			# Print error message
-	# 			# -> STATE_WANDER
-	# 			pass
-	# 		case 1: # STATE_WANDER
-	# 			# Just wander around until a marker is found
-	# 			# Avoid obstacles
-	# 			# -> STATE_AISLE_DOWN
-	# 			pass
-	# 		case 2: # STATE_AISLE_DOWN
-	# 			# Go down the aisle to the right bay
-	# 			# Avoid obstacles
-	# 			# -> STATE_FACE_BAY
-	# 			pass
-	# 		case 3: # STATE_FACE_BAY
-	# 			# Turn to the bay and position in front of it
-	# 			# -> STATE_COLLECT_ITEM
-	# 			pass
-	# 		case 4: # STATE_COLLECT_ITEM
-	# 			# Reach up ad grab the item
-	# 			# -> STATE_FACE_OUT
-	# 			pass
-	# 		case 5: # STATE_FACE_OUT
-	# 			# Turn to face out of the aisle (need to remember which side we're on)
-	# 			# -> STATE_WANDER_OUT
-	# 			pass
-	# 		case 6: # STATE_WANDER_OUT
-	# 			# Go forward out of the aisle until we see the pakcing station.
-	# 			# If we hit a wall turn right
-	# 			# Don't enter an aisle
-	# 			# Avoid obstacles
-	# 			# -> STATE_FACE_PACKING
-	# 			pass
-	# 		case 7: # STATE_FACE_PACKING
-	# 			# Turn to face packing station
-	# 			# -> STATE_APPROACH_PACKING
-	# 			pass
-	# 		case 8: # STATE_APPROACH_PACKING
-	# 			# Go to the packing station but don't go up it
-	# 			# Avoid obstacles
-	# 			# STATE_ASCEND_PACKING
-	# 			pass
-	# 		case 9: # STATE_ASCEND_PACKING
-	# 			# Go slowly up the packing station
-	# 			# -> STATE_DROP_ITEM
-	# 			pass
-	# 		case 10: # STATE_DROP_ITEM
-	# 			# (Lower the item)
-	# 			# Drop the item
-	# 			# -> STATE_DESCEND_PACKING
-	# 			pass
-	# 		case 11: # STATE_DESCEND_PACKING
-	# 			# Go backwards slowly down the packing station
-	# 			# Then turn 180 degrees
-	# 			# -> STATE_WANDER
-	# 			pass
+	# Call current update function then update the current state
+	@classmethod
+	def update(cls):
+		new_state = cls.call_current_update()
+		if new_state != cls.current_state:
+			cls.current_state = new_state
+			cls.call_current_start()
 
-	# 	packerBotSim.SetTargetVelocities(0,0)
 
 			
 
@@ -507,12 +463,11 @@ if __name__ == '__main__':
 		packerBotSim.StartSimulator()
 		packerBotSim.SetCameraPose(0.1, 0.1, 0)
 
-		botStateMachine = RobotStateMachine(packerBotSim)		
+		RobotStateMachine.init(packerBotSim)		
 
-		
 
 		while True:
-			botStateMachine.update()
+			RobotStateMachine.update()
 			packerBotSim.UpdateObjectPositions() # needs to be called once at the end of the main code loop
 
 	except KeyboardInterrupt as e:
