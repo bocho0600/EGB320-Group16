@@ -11,13 +11,13 @@ def initialize_camera(frame_height=480, frame_width=480, format='XRGB8888'):
     config = cap.create_video_configuration(main={"format": format, "size": (frame_width, frame_height)})
     cap.configure(config)
     #cap.set_controls({"ExposureTime": 29999, "AnalogueGain": 3.76, "ColourGains": (1.76,1.4)})
-    cap.set_controls({"ExposureTime": 21999, "AnalogueGain": 2,  "ColourGains": (1.69,1.45)})
+    cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
     cap.start()
     return cap
 
 # Create a window
 cv2.namedWindow('image')
-
+cv2.namedWindow('Mask')
 # Create trackbars for HSV color filtering
 cv2.createTrackbar('HMin', 'image', 0, 179, nothing)
 cv2.createTrackbar('SMin', 'image', 0, 255, nothing)
@@ -90,6 +90,7 @@ try:
 
         # Display result image
         cv2.imshow('image', result)
+        cv2.imshow('Mask', mask)
         if cv2.waitKey(10) & 0xFF == ord('q'):
             break
 finally:

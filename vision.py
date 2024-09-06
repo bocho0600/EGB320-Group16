@@ -11,13 +11,17 @@ class VisionModule:
     color_ranges = {
         'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
         'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
-        'yellow': (np.array([20, 120, 153]), np.array([25, 233, 218])),
-        'blue': (np.array([102, 0, 0]), np.array([179, 179, 255])),
-        'green': (np.array([30, 8, 49]), np.array([68, 119, 156])),
-        'orange1': (np.array([0, 168, 0]), np.array([20, 255, 255])),
-        #'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
-        'black': (np.array([0, 0, 43]), np.array([179, 55, 109]))
+        'yellow': (np.array([25, 90, 0]), np.array([36, 233, 255])),
+        'blue': (np.array([104, 85, 0]), np.array([123, 255, 255])),
+        'green': (np.array([30, 36, 0]), np.array([96, 255, 226])),
+        'orange1': (np.array([0, 100, 0]), np.array([20, 255, 255])),
+        'orange2': (np.array([165, 100, 0]), np.array([180, 255, 255])),
+        'black': (np.array([0, 0, 43]), np.array([127, 123, 105]))
     }
+
+
+    focal_length = 50 #cm
+    real_circle_diameter = 40 #cm
 
     def __init__(self):
         self.cap = None  # Initialize the camera object as an instance variable
@@ -28,14 +32,17 @@ class VisionModule:
         frame = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
         return frame
 
-    def initialize_camera(self, frame_height=320*2, frame_width=240*2, format='XRGB8888'):
+    def initialize_camera(self, frame_height=640, frame_width=480, format='XRGB8888'):
         # Create a camera object and store it as an instance variable
         self.cap = picamera2.Picamera2()
         config = self.cap.create_video_configuration(main={"format": format, "size": (frame_height, frame_width)})
         self.cap.configure(config)
    
-        self.cap.set_controls({"ExposureTime": 21999, "AnalogueGain": 2,  "ColourGains": (1.69,1.45)})
         
+        self.cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
+        #self.cap.set_controls({"ExposureTime": 50000, "AnalogueGain": 1,  "ColourGains": (1.4,1.5)})
+        self.image_width = frame_width
+        self.image_center = self.image_width // 2 # Calculate the center of the image
         self.cap.start()
 
     def Capturing(self):
@@ -55,19 +62,33 @@ class VisionModule:
 
         cv2.imshow(WindowName, view)
 
+    def findBlack(self, imgHSV):
+        # Create masks for the orange color
+        #HSV90 = cv2.rotate(imgHSV, cv2.ROTATE_180)
+        BlackMask = cv2.inRange(imgHSV, self.color_ranges['black'][0], self.color_ranges['black'][1])
+        #contoursBlack, _ = cv2.findContours(ItemMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return BlackMask
+
     def findItems(self, imgHSV):
         # Create masks for the orange color
         #HSV90 = cv2.rotate(imgHSV, cv2.ROTATE_180)
         ItemMask1 = cv2.inRange(imgHSV, self.color_ranges['orange1'][0], self.color_ranges['orange1'][1])
-        #ItemMask2 = cv2.inRange(HSV90, self.color_ranges['orange2'][0], self.color_ranges['orange2'][1])
-        ItemMask = ItemMask1# | ItemMask2  # Combine masks
+        ItemMask2 = cv2.inRange(imgHSV, self.color_ranges['orange2'][0], self.color_ranges['orange2'][1])
+        ItemMask = ItemMask1 | ItemMask2  # Combine masks
         contoursItem, _ = cv2.findContours(ItemMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursItem, ItemMask
 
-    def findShelf(self, imgHSV):
+    def findShelf(self, imgHSV, area_threshold=10000):
+        # Create a mask for the blue color range
         ShelfMask = cv2.inRange(imgHSV, self.color_ranges['blue'][0], self.color_ranges['blue'][1])
+        
+        # Find contours on the mask
         contoursShelf, _ = cv2.findContours(ShelfMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return contoursShelf, ShelfMask
+        
+        # Filter out small contours by area
+        filtered_contours = [cnt for cnt in contoursShelf if cv2.contourArea(cnt) > area_threshold]
+        
+        return filtered_contours, ShelfMask
 
     def findLoadingArea(self, imgHSV):
         LoadingAreaMask = cv2.inRange(imgHSV, self.color_ranges['yellow'][0], self.color_ranges['yellow'][1])
@@ -106,9 +127,7 @@ class VisionModule:
                 # Determine the number of vertices
                 num_vertices = len(ShapeContours)
                 # Identify the shape based on the number of vertices
-                if num_vertices == 3:
-                    shape = "Triangle"
-                elif num_vertices == 4:
+                if num_vertices == 4:
                     shape = "Square"
                 elif num_vertices > 4 and num_vertices < 8:
                     shape = "Circle"  # Assuming more than 4 sides is a circle for simplicity
@@ -130,25 +149,34 @@ class VisionModule:
 
     def GetContoursShelf(self, contours, output, colour, text, Draw=True):
         detected = False
+        center = (0, 0)
+        radius = 0
         for contour in contours:
             if cv2.contourArea(contour) > 1000:
-                # Get the minimum enclosing circle
-                (x, y), radius = cv2.minEnclosingCircle(contour)
-                center = (int(x), int(y))
-                radius = int(radius)
+                # Calculate the contour's center using moments
+                M = cv2.moments(contour)
+                if M['m00'] != 0:  # Avoid division by zero
+                    center = (int(M['m10'] / M['m00']), int(M['m01'] / M['m00']))
+                else:
+                    center = (0, 0)
                 
                 if Draw:
-                    # Draw the circle around the object
-                    #cv2.circle(output, center, radius, colour, 2)
-                    cv2.drawContours(output, contours, -1, colour, 2)
-                    #cv2.drawContours(output, [contour], -1, colour, 2)
-                    # Optionally, draw the text near the circle
-                    cv2.putText(output, text, (center[0] - radius, center[1] - radius - 10), 
+                    # Draw the contour
+                    cv2.drawContours(output, [contour], -1, colour, 2)
+                    
+                    # Draw the text at the center of the contour
+                    cv2.putText(output, text, center, 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    
                 detected = True
+                # If you want to calculate a bounding box
+                x, y, w, h = cv2.boundingRect(contour)
+                x1, y1, x2, y2 = x, y, x + w, y + h
+            else:
+                x1, y1, x2, y2 = None, None, None, None
+
         if detected:
-            x1, y1, x2, y2 = center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius
-            return x1, y1, x2, y2, 
+            return x1, y1, x2, y2
         else:
             return None, None, None, None
         
@@ -166,6 +194,11 @@ class VisionModule:
             return x1, y1, x2, y2
         else:
             return  None, None, None, None
-        
+    
+    def GetDistance(self, length, shape):
+        if shape == "Circle":
+            return (self.focal_length * self.real_circle_diameter) / length
+        elif shape == "Square":
+            return (self.focal_length * self.square_width) / length
         
 

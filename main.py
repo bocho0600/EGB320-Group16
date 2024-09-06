@@ -12,24 +12,38 @@ def main(): # Main function
       i2c = I2C.I2C()
       vision = vs.VisionModule()
       cap = vision.initialize_camera()
+      image_center = 240
+      image_width = 240 * 2
       while(1):
             img,imgHSV,robotview = vision.Capturing()
             imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-            contoursItem, ItemMask = vision.findItems(imgHSV)
-            xi1, yi1, xi2, yi2 = vision.GetContoursObject(contoursItem, robotview, (0, 255, 0), "Item", Draw = True)
+            #contoursItem, ItemMask = vision.findItems(imgHSV)
+            #xi1, yi1, xi2, yi2 = vision.GetContoursObject(contoursItem, robotview, (0, 255, 0), "Item", Draw = True)
 
             contoursShelf, ShelfMask = vision.findShelf(imgHSV)
             xs1, ys1, xs2, ys2 = vision.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "Shelf", Draw = True)
 
-            #contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
-            #xo1, yo1, xo2, yo2 = vision.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obstacle", Draw = True)
-            BlackContours, BlackMask = cv2.threshold(imgGray, 120, 255, cv2.THRESH_BINARY_INV) # Apply thresholding to get white colour filter
-            BlackMask = BlackMask - ShelfMask - ItemMask
-            contoursMarkers, MarkerMask = cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
+            xo1, yo1, xo2, yo2 = vision.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obstacle", Draw = True)
 
+            contoursLoading, LoadingMask = vision.findLoadingArea(imgHSV)
+            xl1, yl1, xl2, yl2 = vision.GetContoursShelf(contoursLoading, robotview, (120, 120, 255), "LoadingArea", Draw = True)
+
+            BlackMask12 = vision.findBlack(imgHSV)
+
+
+            BlackContours, BlackMask = cv2.threshold(imgGray, 150, 255, cv2.THRESH_BINARY_INV) # Apply thresholding to get white colour filter
+            #BlackContours, BlackMask = cv2.threshold(imgGray, 160, 255, cv2.THRESH_BINARY) # Apply thresholding to get white colour filter
+            #BlackMask = BlackMask - ObstacleMask# -ShelfMask
+            BlackMask = cv2.bitwise_and(BlackMask,BlackMask12)
+            contoursMarkers, MarkerMask = cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            focal_length = 130 #cm
+            real_circle_diameter = 70 #cm
+            #distance = 100 #cm
+            circle_count = 0  # Initialize circle counter
             for contour in contoursMarkers:
-                  if cv2.contourArea(contour)>2000 and cv2.contourArea(contour)<15000:  # Skip small contours
+                  if cv2.contourArea(contour)>1000: #and cv2.contourArea(contour)<50000:  # Skip small contours
                         epsilon = 0.03 * cv2.arcLength(contour, True)  # Calculate the perimeter of the contour
                         
                         # Approximate the contour
@@ -43,16 +57,29 @@ def main(): # Main function
                               shape = "Square"
                         elif num_vertices > 4 and num_vertices < 12:
                               shape = "Circle"  # Assuming more than 4 sides is a circle for simplicity
+                              # Find the minimum enclosing circle and calculate diameter
+                              (x_center, y_center), radius = cv2.minEnclosingCircle(contour)
+                              diameter = 2 * radius  # Diameter is twice the radius
+                              distance = (focal_length * real_circle_diameter) / diameter + 4
+                              offset_pixels = x_center - image_center
+                              angle = (offset_pixels / image_width) * 22.3
+                              circle_count += 1 
+                              # Draw the circle
+                              cv2.circle(robotview, (int(x_center), int(y_center)), int(radius), (0, 255, 0), 2)
+                              # Add text for diameter
+                              cv2.circle(robotview, (int(240), int(320)), int(22), (255, 0, 0), 2)
+                              #cv2.putText(robotview, f"Distance: {int(distance)}", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
+                              cv2.putText(robotview, f"Angle: {int(angle)}", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
                         else:
                               shape = "Unknown"
 
                         # Only recognize squares and circles
-                        if shape in ["Square", "Circle"]:
+                        if shape in ["Circle"]:
                               cv2.drawContours(robotview, [ShapeContours], -1, [123,123,123], 3)
                               x, y = ShapeContours.ravel()[0], ShapeContours.ravel()[1]
                               cv2.putText(robotview, shape, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
 
-
+            #print("detected ", circle_count," amount of ",shape)
 
             #WallMask, contoursMarkers, WallImage = vision.findWall(imgGray, img)
             #detected_shapes, shape_count,shape = vision.MarkersDetection(contoursMarkers, robotview, (0, 255, 0), Draw=True)
@@ -60,7 +87,8 @@ def main(): # Main function
   
 
             vision.ExportImage("RobotView", robotview, FPS = True)
-            vision.ExportImage("WallMask", BlackMask, FPS = True)
+            vision.ExportImage("BlackMask", BlackMask, FPS = True)
+            vision.ExportImage("BlueMask", ShelfMask, FPS = True)
 
             if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
                   break

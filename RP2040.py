@@ -61,8 +61,8 @@ class I2C:
         if speed < 0 or speed > 255:  # Allow any angle within the servo's range
             print(f"Invalid angle: {speed}. Please choose between 0 and 255.")
             return
-        if direction not in ["0", "1", "STOP"]:
-            print("Invalid direction. Please choose between 0, 1 or 'S' to STOP.")
+        if direction not in ["0", "1", "S"]:
+            print("Invalid direction. Please choose between 0, 1 or 'S' for STOP.")
             return
         command = f"M{number} {direction} {speed}"
         print(f"Sending command to servo: {command}")
@@ -70,6 +70,6 @@ class I2C:
 
 
 
-# Example usage
+
 
 
