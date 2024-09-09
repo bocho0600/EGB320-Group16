@@ -1,98 +1,123 @@
 import cv2
-import numpy as np
 import picamera2
+import numpy as np
+from threading import Thread
+import time
 
-def nothing(x):
-    pass
+# Define the runVision function (can be customized as needed)
+def runVision():
+    # Placeholder for vision processing logic
+    range = 1
+    bearing = 2
+    return range, bearing
 
-# Initialize PiCamera
-def initialize_camera(frame_height=480, frame_width=480, format='XRGB8888'):
-    cap = picamera2.Picamera2()
-    config = cap.create_video_configuration(main={"format": format, "size": (frame_width, frame_height)})
-    cap.configure(config)
-    #cap.set_controls({"ExposureTime": 29999, "AnalogueGain": 3.76, "ColourGains": (1.76,1.4)})
-    #cap.set_controls({"ExposureTime": 21999, "AnalogueGain": 2,  "ColourGains": (1.69,1.45)})
-    cap.start()
-    return cap
-
-# Create a window
-cv2.namedWindow('image')
-
-# Create trackbars for HSV color filtering
-cv2.createTrackbar('HMin', 'image', 0, 179, nothing)
-cv2.createTrackbar('SMin', 'image', 0, 255, nothing)
-cv2.createTrackbar('VMin', 'image', 0, 255, nothing)
-cv2.createTrackbar('HMax', 'image', 0, 179, nothing)
-cv2.createTrackbar('SMax', 'image', 0, 255, nothing)
-cv2.createTrackbar('VMax', 'image', 0, 255, nothing)
-
-# Set default values for Max HSV trackbars
-cv2.setTrackbarPos('HMax', 'image', 179)
-cv2.setTrackbarPos('SMax', 'image', 255)
-cv2.setTrackbarPos('VMax', 'image', 255)
-
-# Initialize HSV min/max values
-hMin = sMin = vMin = hMax = sMax = vMax = 0
-phMin = psMin = pvMin = phMax = psMax = pvMax = 0
-
-# Initialize the camera
-cap = initialize_camera()
-
-try:
-    while True:
-        # Capture frame-by-frame
-        frame = cap.capture_array()
-        frame = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
-
-        # Get current camera settings (metadata)
-        metadata = cap.capture_metadata()
-        exposure_time = metadata.get("ExposureTime", "N/A")
-        awb_mode = metadata.get("AwbMode", "N/A")
-        awb_gains = metadata.get("AwbGains", "N/A")
+# Define the CamFrameGrabber class
+class CamFrameGrabber:
+    # FOV = number of degrees for camera view
+    def __init__(self, src, width, height):
+        # Initialize the camera
+        self.camera = picamera2.Picamera2()
+        self.width = width
+        self.height = height
         
-        # Get additional camera settings if available
-        analogue_gain = metadata.get("AnalogueGain", "N/A")
-        colour_gains = metadata.get("ColourGains", "N/A")
+        # Define the configuration for the camera
+        config = self.camera.create_video_configuration(
+            main={"format": 'XRGB8888', "size": (height, width)}
+        )
+        self.camera.configure(config)
+        self.camera.start()
+        
+        self.cameraStopped = False
+        self.gotFrame = False
+        self.currentFrame = np.zeros((height, width, 3), np.uint8)
+        self.frameid = 0  # Initialize frame ID
+        
+        # Capture the first frame
+        self.currentFrame = self.camera.capture_array()
 
-        # Print the current camera settings
-        print(f"Current Exposure Time: {exposure_time}")
-        print(f"Current AWB Mode: {awb_mode}")
-        print(f"Current AWB Gains: {awb_gains}")
-        print(f"Current Analogue Gain: {analogue_gain}")
-        print(f"Current Colour Gains: {colour_gains}")
+    def start(self):
+        # Start the image capturing thread
+        Thread(target=self.captureImage, args=()).start()  # Running the camera capturing in background threads
+        return self
 
-        # Get current positions of HSV trackbars
-        hMin = cv2.getTrackbarPos('HMin', 'image')
-        sMin = cv2.getTrackbarPos('SMin', 'image')
-        vMin = cv2.getTrackbarPos('VMin', 'image')
-        hMax = cv2.getTrackbarPos('HMax', 'image')
-        sMax = cv2.getTrackbarPos('SMax', 'image')
-        vMax = cv2.getTrackbarPos('VMax', 'image')
+    def captureImage(self):
+        # Continuously capture frames until stopped
+        while True:
+            if self.cameraStopped:
+                return
+            # Capture frame from the camera
+            self.currentFrame = self.camera.capture_array()
+            self.frameid += 1  # Increment the frame ID after capturing each frame
 
-        # Set minimum and maximum HSV values to display
-        lower = np.array([hMin, sMin, vMin])
-        upper = np.array([hMax, sMax, vMax])
+    def getCurrentFrame(self):
+        # Return the current frame
+        return self.currentFrame
 
-        # Convert to HSV format and color threshold
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, lower, upper)
-        result = cv2.bitwise_and(frame, frame, mask=mask)
+    def getFrameID(self):
+        # Return the current frame ID
+        return self.frameid
 
-        # Print if there is a change in HSV value
-        if((phMin != hMin) or (psMin != sMin) or (pvMin != vMin) or (phMax != hMax) or (psMax != sMax) or (pvMax != vMax)):
-            print(f"(hMin = {hMin}, sMin = {sMin}, vMin = {vMin}), (hMax = {hMax}, sMax = {sMax}, vMax = {vMax})")
-            phMin = hMin
-            psMin = sMin
-            pvMin = vMin
-            phMax = hMax
-            psMax = sMax
-            pvMax = vMax
+    def stop(self):
+        # Stop the camera capture
+        self.cameraStopped = True
 
-        # Display result image
-        cv2.imshow('image', result)
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
-finally:
-    # Release resources
-    cap.close()
+    def __del__(self):
+        # Release the camera and clean up OpenCV windows
+        self.camera.release()
+        cv2.destroyAllWindows()
+
+# Main function to demonstrate the usage of CamFrameGrabber
+def main():
+    # Define the width and height for the camera feed
+    width = 616
+    height = 820
+    
+    # Initialize the CamFrameGrabber
+    cam = CamFrameGrabber(src=0, width=width, height=height)
+    
+    # Start capturing frames
+    cam.start()
+    
+    # Create a window to display the frames
+    #cv2.namedWindow("Camera Feed", cv2.WINDOW_NORMAL)
+    
+    previous_frame_id = -1  # Store the previous frame ID for comparison
+    
+    try:
+        while True:
+            # Start measuring time at the beginning of the frame capture process
+            t1 = time.time()  
+            
+            # Get the current frame and frame ID
+            frame = cam.getCurrentFrame()
+            current_frame_id = cam.getFrameID()
+            
+            # Only display the frame if the frame ID is different from the previous one
+            if current_frame_id != previous_frame_id:
+                # Display the frame using OpenCV
+                cv2.imshow("Camera Feed", frame)
+                
+                # Update the previous frame ID
+                previous_frame_id = current_frame_id
+                
+                # Calculate and print the FPS (after the frame has been displayed)
+                fps = 1.0 / (time.time() - t1)  # calculate frame rate
+                print(f"FPS: {fps:.2f}")
+            
+            # Break the loop if 'q' is pressed
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    
+    except KeyboardInterrupt:
+        # Gracefully handle a keyboard interrupt (Ctrl+C)
+        print("Stopping camera capture...")
+
+    # Stop the camera capture
+    cam.stop()
+    
+    # Release resources and close windows
     cv2.destroyAllWindows()
+
+# Run the main function
+if __name__ == "__main__":
+    main()

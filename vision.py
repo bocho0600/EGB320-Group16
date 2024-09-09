@@ -2,7 +2,7 @@ import cv2
 import picamera2
 import numpy as np
 import time
-
+from threading import Thread
 # MADE BY KELVIN LE, QUT EGB320 GROUP16 
 # StudentID: n11429984
 # Email: minhnguyen.le@qut.edu.au
@@ -46,7 +46,6 @@ class VisionModule:
         self.cap.start()
 
     def Capturing(self):
-        kernel = np.ones((2, 2), np.uint8)
         self.t1 = time.time()  # For measuring FPS
         img = self.CaptureImage()  # Capture a single image frame
         imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
@@ -202,3 +201,59 @@ class VisionModule:
             return (self.focal_length * self.square_width) / length
         
 
+# Define the CamFrameGrabber class
+class CamFrameGrabber:
+    # FOV = number of degrees for camera view
+    def __init__(self, src, width, height):
+        # Initialize the camera
+        self.camera = picamera2.Picamera2()
+        self.width = width
+        self.height = height
+        
+        # Define the configuration for the camera
+        config = self.camera.create_video_configuration(
+            main={"format": 'XRGB8888', "size": (height, width)}
+        )
+        
+        self.camera.configure(config)
+        self.camera.set_controls({"ExposureTime": 100000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
+        self.camera.start()
+        
+        self.cameraStopped = False
+        self.gotFrame = False
+        self.currentFrame = np.zeros((height, width, 3), np.uint8)
+        self.frameid = 0  # Initialize frame ID
+        
+        # Capture the first frame
+        self.currentFrame = self.camera.capture_array()
+
+    def start(self):
+        # Start the image capturing thread
+        Thread(target=self.captureImage, args=()).start()  # Running the camera capturing in background threads
+        return self
+
+    def captureImage(self):
+        # Continuously capture frames until stopped
+        while True:
+            if self.cameraStopped:
+                return
+            # Capture frame from the camera
+            self.currentFrame = self.camera.capture_array()
+            self.frameid += 1  # Increment the frame ID after capturing each frame
+
+    def getCurrentFrame(self):
+        # Return the current frame
+        return self.currentFrame
+
+    def getFrameID(self):
+        # Return the current frame ID
+        return self.frameid
+
+    def stop(self):
+        # Stop the camera capture
+        self.cameraStopped = True
+
+    def __del__(self):
+        # Release the camera and clean up OpenCV windows
+        self.camera.release()
+        cv2.destroyAllWindows()
