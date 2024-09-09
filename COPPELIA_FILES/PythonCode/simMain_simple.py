@@ -4,46 +4,139 @@
 from warehousebot_lib import *
 import numpy as np, cv2
 import time
-from math import cos, sin
+from math import cos, sin, pi
+from enum import Enum
 
-STATE_LOST = 0
-STATE_WANDER = 1
-STATE_AISLE_DOWN = 2
-STATE_FACE_BAY = 3
-STATE_COLLECT_ITEM = 4
-STATE_FACE_OUT = 5
-STATE_WANDER_OUT = 6
-STATE_FACE_PACKING = 7
-STATE_APPROACH_PACKING = 8
-STATE_ASCEND_PACKING = 9
-STATE_DROP_ITEM = 10
-STATE_DESCEND_PACKING = 11
 
-PHASE_COLLECT = 0
-PHASE_DROPOFF = 1
+STATE = Enum('STATE', [
+	'LOST',
+	'WANDER',
+	'AISLE_DOWN',
+	'FACE_BAY',
+	'COLLECT_ITEM',
+	'FACE_OUT',
+	'WANDER_OUT',
+	'FACE_PACKING',
+	'APPROACH_PACKING',
+	'ASCEND_PACKING',
+	'DROP_ITEM',
+	'DESCEND_PACKING',
+	])
 
-class State:
-	def __init__(self, packerBotSim):
-		self.pbs = packerBotSim
-		self.last_fwd = 0
-		self.last_rot = 0
-		#self.start()
-	
-	def set_velocity(self, fwd, rot):
-		self.last_fwd = fwd
-		self.last_rot = rot
-		self.pbs.SetTargetVelocities(fwd, -rot)
-	
-	def get_image(self):
-		_, img = self.pbs.GetCameraImage()
+PHASE = Enum('PHASE', [
+	'COLLECT',
+	'DROPOFF'
+	])
 
-		img = convert_image(img)
+
+class Vision:
+	pbs = None
+
+	@classmethod
+	def set_packer_bot(cls, packerBotSim):
+		cls.pbs = packerBotSim
+
+	@staticmethod
+	def convert_image(img):
+		img = np.reshape((np.array(img).astype(np.uint8)), (480,640,3))
+		return cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 0)
+
+	color_ranges = {
+				'floor': (np.array([0, 0, 80]), np.array([0, 0, 135])),
+				'wall': (np.array([0, 0, 146]), np.array([30, 1, 255])),
+				'blue': (np.array([3, 171, 54]), np.array([3, 175, 112])),
+				'black': (np.array([0, 0, 0]), np.array([0, 0, 0])),
+				'yellow': (np.array([99, 216, 130]), np.array([99, 217, 187])),
+				'green': (np.array([40, 90, 0]), np.array([70, 255, 180])),
+				'orange1': (np.array([5, 150, 150]), np.array([20, 255, 255])),
+				'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
+		}
+
+	@classmethod
+	def get_image(cls):
+		_, img = cls.pbs.GetCameraImage()
+
+		img = Vision.convert_image(img)
 		img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
 		return img
+	
+	@staticmethod
+	def findFloor(img):
+		imgHSV = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+		FloorMask = cv2.inRange(imgHSV, Vision.color_ranges['floor'][0], Vision.color_ranges['floor'][1])
+		FloorMask = cv2.morphologyEx(FloorMask, cv2.MORPH_CLOSE, np.ones((3,3)))
+		contoursFloor, _ = cv2.findContours(FloorMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+		return contoursFloor, FloorMask
 
-	def expand_safety(self, dist_map):
-		d_theta = np.pi/3 / SCREEN_WIDTH # angle per pixel horizontally
-		radius = 0.20 # how far to stay away from wall
+
+class Navigation:
+
+	last_fwd = 0
+	last_rot = 0
+
+	pbs = None
+
+	MAX_ROBOT_VEL = 0.2 # m/s
+	ROTATIONAL_BIAS = 0.9 #tweak this parameter to be more or less aggressive with turns vs straight
+	Kp = 1.0 # proportional term. beware if its too high we will try to go backwards for sharp turns
+	MAX_ROBOT_ROT = pi/3 * Kp # rad/s
+	RADIUS = 0.2 # how far to stay away from wall
+
+	
+	# For each state define a start and update function stored in this dict
+	state_callbacks = {}
+
+	@classmethod
+	def initialise_callbacks(cls):
+		cls.state_callbacks[STATE.WANDER] = (cls.wander_start, cls.wander_update)
+
+	@classmethod
+	def set_packer_bot(cls, packerBotSim):
+		cls.pbs = packerBotSim
+	
+	#region Utility Functions
+	@classmethod
+	def calculate_view_transforms(cls):
+		#ANGLE_H = packerBotSim.horizontalViewAngle
+		#ANGLE_V = packerBotSim.verticalViewAngle
+
+		DIST_X = 0#packerBotSim.robotParameters.cameraDistanceFromRobotCenter
+		DIST_Z = 0.0752#packerBotSim.robotParameters.cameraHeightFromFloor
+		# tilt = packerBotSim.robotParameters.cameraTilt
+		TILT = 1.5 * 3.1415926535 / 180
+		# tilt is meant to be 0 but it is slightly off in simulator
+
+		# Precalculate Transformation Matrices and ground plane
+		camera_to_robot_rotate = np.array([
+				[cos(TILT), 0, -sin(TILT), 0],
+				[        0, 1,          0, 0],
+				[sin(TILT), 0,  cos(TILT), 0],
+				[        0, 0,          0, 1]])
+		camera_to_robot_translate = np.array([
+				[1, 0, 0, DIST_X],
+				[0, 1, 0,      0],
+				[0, 0, 1, DIST_Z],
+				[0, 0, 0,      1]])
+		
+		cls.camera_to_robot = np.matmul(camera_to_robot_translate,camera_to_robot_rotate)
+		robot_to_camera = np.linalg.inv(cls.camera_to_robot)
+		#robot_to_camera_translate = np.linalg.inv(camera_to_robot_translate)
+		robot_to_camera_rotate = np.linalg.inv(camera_to_robot_rotate)
+
+		# Normal and point of the ground plane, relative to camera
+		cls.normal_camera = np.matmul(robot_to_camera_rotate , np.array([[0,0,1,1]]).T)[0:3, 0]
+		cls.r_camera = np.matmul(robot_to_camera , np.array([[0,0,0,1]]).T)[0:3, 0]
+
+	@classmethod
+	def set_velocity(cls, fwd, rot):
+		cls.last_fwd = fwd
+		cls.last_rot = rot
+		cls.pbs.SetTargetVelocities(fwd, -rot)
+	
+	
+	@classmethod
+	def expand_safety(cls,dist_map):
+		d_theta = FOV_HORIZONTAL / SCREEN_WIDTH # angle per pixel horizontally
 
 		# left to right
 		dist_map = dist_map.copy()
@@ -53,7 +146,7 @@ class State:
 			# update points in effect. Decrease the angle and discard expired points
 			effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
 			# add the current point
-			effect.append((curr_dist, np.arctan(radius/curr_dist)))
+			effect.append((curr_dist, np.arctan(cls.RADIUS/curr_dist)))
 			# update the current point
 			dist_map[i] = min([dist for dist,angle_left in effect])
 		
@@ -63,55 +156,53 @@ class State:
 			# update points in effect. Decrease the angle and discard expired points
 			effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
 			# add the current point
-			effect.append((curr_dist, np.arctan(radius/curr_dist)))
+			effect.append((curr_dist, np.arctan(cls.RADIUS/curr_dist)))
 			# update the current point
 			dist_map[-1-i] = min([dist for dist,angle_left in effect])
 		return dist_map
 
-
-
-	def start(self):
-		# override
-		raise NotImplementedError("start should be overidden")
-
-	def update(self):
-		# override
-		raise NotImplementedError("update should be overidden")
-
-class State_Wander(State):
 	
-	def start(self):
-		self.last_left_dist = 2.0
-		self.last_right_dist = 2.0
-		self.avoid_right = 0
-		self.avoid_left = 0
-		self.left_obstacle_dist = None
-		self.right_obstacle_dist = None
-		self.t_now = time.time()
-		
+	@classmethod
+	def project_point_to_ground(cls,screen_coords):
+		x = screen_coords[:, 0]
+		y = screen_coords[:, 1]
 
-	def update(self):
-		t_last = self.t_now
-		self.t_now = time.time()
-		delta = self.t_now-t_last
+		# Coordinates on a plane in front of the camera, relative to camera
+		cx = -(x-SCREEN_WIDTH/2) / SCREEN_WIDTH
+		cy = -(y-SCREEN_HEIGHT/2) / SCREEN_WIDTH
+		cz = 1 / FOV_HORIZONTAL * np.ones(cx.shape)
+		cpi = np.array([cz,-cx,cy])
 
-		img = self.get_image()
-		
-		# exclude small areas and consider in order of size
-		contour, mask = findFloor(img)
-		contour = [cont for cont in contour if cv2.contourArea(cont) > 200]
-		contour = sorted(contour, key=lambda cont: -cv2.contourArea(cont))
 
-		res = img.copy()
-		#res = cv2.bitwise_and(img, img, mask=mask)
+		# coordinates on the ground, relative to camera
+		cpo = np.dot(cls.normal_camera, cls.r_camera) / np.dot(cls.normal_camera, cpi) * cpi
+		cpo = np.array([cpo[0,:], cpo[1,:], cpo[2,:], np.ones(cpo[0,:].shape)])
+
+		# coodinates on the ground, relative to robot
+		rpo = np.matmul(cls.camera_to_robot, cpo)
+		return rpo[0:2,:].T
+	
+	@classmethod
+	def timer_init(cls):
+		cls.t_now = time.time()
+
+	@classmethod
+	def timer_update(cls):
+		t_last = cls.t_now
+		cls.t_now = time.time()
+		return cls.t_now - t_last
+
+	@staticmethod
+	def combine_contour_points(contours):
+		# Are must be greater then 200. Then, sort the remaining ones by their area
+		contours = [cont for cont in contours if cv2.contourArea(cont) > 200]
+		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
 		
-		floor_contour = None
+		combined_contour = None
 		xmax = -1
 		xmin = SCREEN_WIDTH+1
-		for i,cont in enumerate(contour):
-			# res = cv2.drawContours(res, cont, -1, (0,255,255),2)
-			# res = cv2.putText(res, str(i), (np.array(cv2.boundingRect(cont)[0:2]) + 0.5*np.array(cv2.boundingRect(cont)[2:])).astype(np.int32), 0, 1, (0,255,255))
-			
+		for cont in contours:
+
 			bounds = cv2.boundingRect(cont) # left, top, width, height
 
 			# only consider new contours strictly outside of what we have already seen
@@ -148,266 +239,204 @@ class State_Wander(State):
 			# 	npc = np.r_[npc, [[npc[-1,0]+1, SCREEN_HEIGHT-1]]]	
 
 			
-			
-			# # append to floor_contour
-			if floor_contour is None:
-				floor_contour = npc
+			# # append to comvined_contour
+			if combined_contour is None:
+				combined_contour = npc
 			else:
-				floor_contour = np.r_[floor_contour, npc]
+				combined_contour = np.r_[combined_contour, npc]
+		return combined_contour
 
-
-		
-	
-		if floor_contour is not None:
+	@classmethod
+	def project_and_filter_contour(cls,contour_points):
+		if contour_points is not None:
 			# make sure it is sorted from left to right and only keep one point per column. (lower points preferred)	
-			floor_contour = floor_contour[np.unique(floor_contour[:, 0], return_index=True)[1]]
+			contour_points = contour_points[np.unique(contour_points[:, 0], return_index=True)[1]]
 
 
 			# project contour onto the ground
-			projected_floor = project_point_to_ground(floor_contour)
+			projection = cls.project_point_to_ground(contour_points)
 
 			# discard points above the horizon
-			mask = projected_floor[:, 0] >= 0
-			projected_floor = projected_floor[mask]
-			floor_contour = floor_contour[mask]
+			mask = projection[:, 0] >= 0
+			projection = projection[mask]
+			contour_points = contour_points[mask]
+			return contour_points, projection
+		else:
+			return None, None
 
-		if floor_contour is not None and floor_contour.size > 0:
-			# draw
-			res = cv2.polylines(res, [floor_contour], False, (0, 0, 255), 1) # draw
+	@staticmethod
+	def get_dist_map(contour_points, projection):
+		# distances of each point. However each point does not match 1 to 1 with pixels
+		dist_real = np.sqrt(projection[:,0]**2 + projection[:,1]**2)
+		
+		# find which point matches to which pixel considering duplicates and skips
+		dist_map = np.zeros(SCREEN_WIDTH, np.float32)
+		j = 0
+		for i in range(len(dist_map)):
+			while j < len(contour_points)-1 and contour_points[j, 0] < i:
+				j += 1
+			dist_map[i] = dist_real[j]
+		return dist_map
 
-			# distances of each point. However each point does not match 1 to 1 with pixels
-			dist_real = np.sqrt(projected_floor[:,0]**2 + projected_floor[:,1]**2)
-			
-			# find which point matches to which pixel considering duplicates and skips
-			dist_map = np.zeros(SCREEN_WIDTH, np.float32)
-			j = 0
-			for i in range(len(dist_map)):
-				while j < len(floor_contour)-1 and floor_contour[j, 0] < i:
-					j += 1
-				dist_map[i] = dist_real[j]
-
+	@classmethod
+	def forced_avoidance(cls, dist_map):
+		if dist_map is not None:
 			# Forced Avoidance
 			left_dist = dist_map[0]
 			right_dist = dist_map[-1]
 			
-			sudden_left = left_dist - self.last_left_dist
-			sudden_right = right_dist - self.last_right_dist
+			change_in_left = left_dist - cls.last_left_dist
+			change_in_right = right_dist - cls.last_right_dist
 			
 			# if we were within 0.3m of an obstacle and cant see it anymore
 			# (edge distance increased by 0.2 or more,  *this only works for shelves, if there are narrow obstacles it will be weird* )
-			if sudden_left > 0.2 and self.last_left_dist < 0.3 and self.last_fwd > 0 and self.last_rot > 0:
+			if change_in_left > 0.2 and cls.last_left_dist < 0.3 and cls.last_fwd > 0 and cls.last_rot > 0:
 				print("AVOID LEFT!")
-				self.avoid_left = self.last_left_dist * sin(np.pi/3)+0.2
-				self.left_obstacle_dist = self.last_left_dist
-			if sudden_right > 0.2 and self.last_right_dist < 0.3 and self.last_fwd > 0 and self.last_rot < 0:
+				cls.avoid_left = cls.last_left_dist * sin(pi/3)+0.2
+				cls.left_obstacle_dist = cls.last_left_dist
+			if change_in_right > 0.2 and cls.last_right_dist < 0.3 and cls.last_fwd > 0 and cls.last_rot < 0:
 				print("AVOID RIGHT!")
-				self.avoid_right = self.last_right_dist * sin(np.pi/3)+0.2
-				self.right_obstacle_dist = self.last_right_dist
+				cls.avoid_right = cls.last_right_dist * sin(pi/3)+0.2
+				cls.right_obstacle_dist = cls.last_right_dist
 
 			# if we are avoiding an obstacle just act like it is still there on the edge
-			if self.avoid_left > 0:
-				res = cv2.putText(res, "A", (20,20), 0, 1, (0,0,255), 2)
-				dist_map[0] = self.left_obstacle_dist
-			if self.avoid_right > 0:
-				res = cv2.putText(res, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
-				dist_map[-1] = self.right_obstacle_dist
+			if cls.avoid_left > 0:
+				dist_map[0] = cls.left_obstacle_dist
+			if cls.avoid_right > 0:
+				dist_map[-1] = cls.right_obstacle_dist
 			
-			self.last_left_dist = left_dist
-			self.last_right_dist = right_dist
+			cls.last_left_dist = left_dist
+			cls.last_right_dist = right_dist
+			return dist_map
+		else:
+			cls.last_left_dist = 0.3
+			cls.last_right_dist = 0.3
+	
+	@classmethod
+	def forced_avoidance_timer_update(cls, fwd, delta):
+		if cls.avoid_right>0:
+			cls.avoid_right -= fwd * delta
+		if cls.avoid_left>0:
+			cls.avoid_left -= fwd * delta
+	#endregion
+	
+	#region State Callbacks
+	@classmethod
+	def wander_start(cls):
+		cls.last_left_dist = 2.0
+		cls.last_right_dist = 2.0
+		cls.avoid_right = 0
+		cls.avoid_left = 0
+		cls.left_obstacle_dist = None
+		cls.right_obstacle_dist = None
+		cls.timer_init()
+		
 
+	@classmethod
+	def wander_update(cls):
+		delta = cls.timer_update()
 
-			safety_map = self.expand_safety(dist_map)
+		img = Vision.get_image()
+		debug_img = img.copy()
+
+		# exclude small areas and consider in order of size
+		contour, mask = Vision.findFloor(img)
+		floor_contour = cls.combine_contour_points(contour)
+		floor_contour, projected_floor = cls.project_and_filter_contour(floor_contour)
+
+		if floor_contour is not None and floor_contour.size > 0:
+			# draw
+			debug_img = cv2.polylines(debug_img, [floor_contour], False, (0, 0, 255), 1) # draw
+
+			dist_map = cls.get_dist_map(floor_contour, projected_floor)
+
+			dist_map = cls.forced_avoidance(dist_map)
+			if cls.avoid_left > 0:
+				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
+			if cls.avoid_right > 0:
+				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+
+			safety_map = cls.expand_safety(dist_map)
 			
-			res = cv2.polylines(res, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
-			res = cv2.polylines(res, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
 
-			MAX_ROBOT_VEL = 0.2 # m/s
-			
-			ROTATIONAL_BIAS = 0.9 #tweak this parameter to be more or less aggressive with turns vs straight
-			Kp = 1.0 # proportional term. beware if its too high we will try to go backwards for sharp turns
-			MAX_ROBOT_ROT = np.pi/3 * Kp # rad/s
 
 			if safety_map.max() == safety_map.min():
 				# no safe path- turn and dont move forward
 				
-				goal_error = (dist_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * np.pi/3
-				rotational_vel = goal_error*Kp
+				goal_error = (dist_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
+				rotational_vel = goal_error*cls.Kp
 
 				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
 				forward_vel = 0
 
-				res = cv2.drawMarker(res, (dist_map.argmax(), int(SCREEN_HEIGHT - dist_map.max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
+				debug_img = cv2.drawMarker(debug_img, (dist_map.argmax(), int(SCREEN_HEIGHT - dist_map.max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
 			else:
 				# move into the longest safe path
-				goal_error = (safety_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * np.pi/3
-				rotational_vel = goal_error*Kp
-				forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
+				goal_error = (safety_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
+				rotational_vel = goal_error*cls.Kp
+				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
-				res = cv2.drawMarker(res, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+				debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 			
 			
 		else:
-			rotational_vel = np.pi/2
+			cls.forced_avoidance(None)
+			rotational_vel = pi/2
 			forward_vel = 0
-			left_dist = 0.2
-			right_dist = 0.2
-			self.last_left_dist = 0.2
-			self.last_right_dist = 0.2
-			sudden_left = 0
-			sudden_right = 0
-		
-		
-		
+			
 
-		cv2.imshow("res", res)
+		cv2.imshow("res", debug_img)
 		cv2.waitKey(1)
 
-		print(f"{left_dist:.2f}, {right_dist:.2f}")
+		forward_vel = forward_vel/5
+		rotational_vel = rotational_vel/5
 
-		if self.avoid_right>0:
-			self.avoid_right -= forward_vel * delta
-		if self.avoid_left>0:
-			self.avoid_left -= forward_vel * delta
-		
+		cls.forced_avoidance_timer_update(forward_vel, delta*8)
+		cls.set_velocity(forward_vel,rotational_vel)
 
-		self.set_velocity(forward_vel/5,rotational_vel/5)
-		return STATE_WANDER
-
+		return STATE.WANDER
+	#endregion
 
 class RobotStateMachine:
-	def __init__(self, packerBotSim):
-		self.current_state = STATE_WANDER
-		self.current_phase = PHASE_COLLECT
-		self.all_states = [None, State_Wander]
-		self.pbs = packerBotSim
+
+	# Initial State
+	current_state = STATE.WANDER
+
+	@classmethod
+	def init(cls, packerBotSim):
+		# Initialise vision and navigation 
+		Vision.set_packer_bot(packerBotSim)
 		
-		# Initialise all states in state_o
-		self.state_o = []
-		for state in self.all_states:
-			if state is not None:
-				self.state_o.append(state(self.pbs))
-			else:
-				self.state_o.append(None)
-		
-		self.get_current_state().start()
+		Navigation.initialise_callbacks()
+		Navigation.set_packer_bot(packerBotSim)
+		Navigation.calculate_view_transforms()
+		Navigation.state_callbacks[cls.current_state][0]()
 
-	def get_current_state(self):
-		return self.state_o[self.current_state]
+	# Call the start function for the current state
+	@classmethod
+	def call_current_start(cls):
+		return Navigation.state_callbacks[cls.current_state][0]()
+	
+	# Call the update function for the current state
+	@classmethod
+	def call_current_update(cls):
+		return Navigation.state_callbacks[cls.current_state][1]()
 
-	def update(self, itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing):
-		state_c = self.get_current_state()
-		new_state = state_c.update()
-		if new_state != self.current_state:
-			self.current_state = new_state
-			self.get_current_state().start()
-		
+	# Call current update function then update the current state
+	@classmethod
+	def update(cls):
+		new_state = cls.call_current_update()
+		if new_state != cls.current_state:
+			cls.current_state = new_state
+			cls.call_current_start()
 
-
-	# def update(self, packerBotSim, itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing):
-	# 	match self.current_state:
-	# 		case 0: # STATE_LOST
-	# 			# Print error message
-	# 			# -> STATE_WANDER
-	# 			pass
-	# 		case 1: # STATE_WANDER
-	# 			# Just wander around until a marker is found
-	# 			# Avoid obstacles
-	# 			# -> STATE_AISLE_DOWN
-	# 			pass
-	# 		case 2: # STATE_AISLE_DOWN
-	# 			# Go down the aisle to the right bay
-	# 			# Avoid obstacles
-	# 			# -> STATE_FACE_BAY
-	# 			pass
-	# 		case 3: # STATE_FACE_BAY
-	# 			# Turn to the bay and position in front of it
-	# 			# -> STATE_COLLECT_ITEM
-	# 			pass
-	# 		case 4: # STATE_COLLECT_ITEM
-	# 			# Reach up ad grab the item
-	# 			# -> STATE_FACE_OUT
-	# 			pass
-	# 		case 5: # STATE_FACE_OUT
-	# 			# Turn to face out of the aisle (need to remember which side we're on)
-	# 			# -> STATE_WANDER_OUT
-	# 			pass
-	# 		case 6: # STATE_WANDER_OUT
-	# 			# Go forward out of the aisle until we see the pakcing station.
-	# 			# If we hit a wall turn right
-	# 			# Don't enter an aisle
-	# 			# Avoid obstacles
-	# 			# -> STATE_FACE_PACKING
-	# 			pass
-	# 		case 7: # STATE_FACE_PACKING
-	# 			# Turn to face packing station
-	# 			# -> STATE_APPROACH_PACKING
-	# 			pass
-	# 		case 8: # STATE_APPROACH_PACKING
-	# 			# Go to the packing station but don't go up it
-	# 			# Avoid obstacles
-	# 			# STATE_ASCEND_PACKING
-	# 			pass
-	# 		case 9: # STATE_ASCEND_PACKING
-	# 			# Go slowly up the packing station
-	# 			# -> STATE_DROP_ITEM
-	# 			pass
-	# 		case 10: # STATE_DROP_ITEM
-	# 			# (Lower the item)
-	# 			# Drop the item
-	# 			# -> STATE_DESCEND_PACKING
-	# 			pass
-	# 		case 11: # STATE_DESCEND_PACKING
-	# 			# Go backwards slowly down the packing station
-	# 			# Then turn 180 degrees
-	# 			# -> STATE_WANDER
-	# 			pass
-
-	# 	packerBotSim.SetTargetVelocities(0,0)
 
 			
-	
-def convert_image(img):
-	img = np.reshape((np.array(img).astype(np.uint8)), (480,640,3))
-	return cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 0)
-
-color_ranges = {
-            'floor': (np.array([0, 0, 80]), np.array([0, 0, 135])),
-            'wall': (np.array([0, 0, 146]), np.array([30, 1, 255])),
-            'blue': (np.array([3, 171, 54]), np.array([3, 175, 112])),
-            'black': (np.array([0, 0, 0]), np.array([0, 0, 0])),
-            'yellow': (np.array([99, 216, 130]), np.array([99, 217, 187])),
-            'green': (np.array([40, 90, 0]), np.array([70, 255, 180])),
-            'orange1': (np.array([5, 150, 150]), np.array([20, 255, 255])),
-            'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
-      }
-
-def findFloor(img):
-	imgHSV = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-	FloorMask = cv2.inRange(imgHSV, color_ranges['floor'][0], color_ranges['floor'][1])
-	FloorMask = cv2.morphologyEx(FloorMask, cv2.MORPH_CLOSE, np.ones((3,3)))
-	contoursFloor, _ = cv2.findContours(FloorMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-	return contoursFloor, FloorMask
-
-def project_point_to_ground(screen_coords):
-	x = screen_coords[:, 0]
-	y = screen_coords[:, 1]
-
-	
-	# Coordinates on a plane in front of the camera, relative to camera
-	cx = -(x-SCREEN_WIDTH/2) / SCREEN_WIDTH
-	cy = -(y-SCREEN_HEIGHT/2) / SCREEN_WIDTH
-	cz = 1 / ANGLE_H * np.ones(cx.shape)
-	cpi = np.array([cz,-cx,cy])
 
 
-	# coordinates on the ground, relative to camera
-	cpo = np.dot(normal_camera, r_camera) / np.dot(normal_camera, cpi) * cpi
-	cpo = np.array([cpo[0,:], cpo[1,:], cpo[2,:], np.ones(cpo[0,:].shape)])
-
-	# coodinates on the ground, relative to robot
-	rpo = np.matmul(camera_to_robot, cpo)
-	return rpo[0:2,:].T
 
 # SET SCENE PARAMETERS
 sceneParameters = SceneParameters()
@@ -421,7 +450,7 @@ robotParameters.driveType = 'differential'	# specify if using differential (curr
 
 SCREEN_WIDTH = 320
 SCREEN_HEIGHT = 240
-
+FOV_HORIZONTAL = pi/3
 
 # MAIN SCRIPT
 if __name__ == '__main__':
@@ -434,51 +463,11 @@ if __name__ == '__main__':
 		packerBotSim.StartSimulator()
 		packerBotSim.SetCameraPose(0.1, 0.1, 0)
 
-		botStateMachine = RobotStateMachine(packerBotSim)		
+		RobotStateMachine.init(packerBotSim)		
 
-		ANGLE_H = packerBotSim.horizontalViewAngle
-		ANGLE_V = packerBotSim.verticalViewAngle
-		DIST_X = 0#packerBotSim.robotParameters.cameraDistanceFromRobotCenter
-		DIST_Z = 0.0752#packerBotSim.robotParameters.cameraHeightFromFloor
-		# tilt = packerBotSim.robotParameters.cameraTilt
-		TILT = 1.5 * 3.1415926535 / 180
-		# tilt is meant to be 0 but it is slightly off in simulator
-
-		# Precalculate Transformation Matrices and ground plane
-		camera_to_robot_rotate = np.array([
-				[cos(TILT), 0, -sin(TILT), 0],
-				[        0, 1,          0, 0],
-				[sin(TILT), 0,  cos(TILT), 0],
-				[        0, 0,          0, 1]])
-		camera_to_robot_translate = np.array([
-				[1, 0, 0, DIST_X],
-				[0, 1, 0,      0],
-				[0, 0, 1, DIST_Z],
-				[0, 0, 0,      1]])
-		
-		camera_to_robot = np.matmul(camera_to_robot_translate,camera_to_robot_rotate)
-		robot_to_camera = np.linalg.inv(camera_to_robot)
-		robot_to_camera_translate = np.linalg.inv(camera_to_robot_translate)
-		robot_to_camera_rotate = np.linalg.inv(camera_to_robot_rotate)
-
-		# Normal and point of the ground plane, relative to camera
-		normal_camera = np.matmul(robot_to_camera_rotate , np.array([[0,0,1,1]]).T)[0:3, 0]
-		r_camera = np.matmul(robot_to_camera , np.array([[0,0,0,1]]).T)[0:3, 0]
 
 		while True:
-
-			itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing = packerBotSim.GetDetectedObjects()
-			
-			# print(itemRangeBearing)
-			# print(packingBayRangeBearing)
-			# print(obstaclesRangeBearing)
-			# print(rowMarkerRangeBearing)
-			# print(shelfRangeBearing)
-			# print()
-
-			botStateMachine.update(itemRangeBearing, packingBayRangeBearing, obstaclesRangeBearing, rowMarkerRangeBearing, shelfRangeBearing)
-
-			#packerBotSim.SetTargetVelocities(0, 0)  # forward velocity, rotation
+			RobotStateMachine.update()
 			packerBotSim.UpdateObjectPositions() # needs to be called once at the end of the main code loop
 
 	except KeyboardInterrupt as e:
