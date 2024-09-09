@@ -30,20 +30,20 @@ def main(): # Main function
             contoursLoading, LoadingMask = vision.findLoadingArea(imgHSV)
             xl1, yl1, xl2, yl2 = vision.GetContoursShelf(contoursLoading, robotview, (120, 120, 255), "LoadingArea", Draw = True)
 
-            BlackMask12 = vision.findBlack(imgHSV)
+            BlackMask = vision.findBlack(imgHSV)
 
 
-            BlackContours, BlackMask = cv2.threshold(imgGray, 150, 255, cv2.THRESH_BINARY_INV) # Apply thresholding to get white colour filter
+            #BlackContours, BlackMask = cv2.threshold(imgGray, 150, 255, cv2.THRESH_BINARY_INV) # Apply thresholding to get white colour filter
             #BlackContours, BlackMask = cv2.threshold(imgGray, 160, 255, cv2.THRESH_BINARY) # Apply thresholding to get white colour filter
             #BlackMask = BlackMask - ObstacleMask# -ShelfMask
-            BlackMask = cv2.bitwise_and(BlackMask,BlackMask12)
+            #BlackMask = cv2.bitwise_and(BlackMask,BlackMask12)
             contoursMarkers, MarkerMask = cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             focal_length = 130 #cm
             real_circle_diameter = 70 #cm
             #distance = 100 #cm
             circle_count = 0  # Initialize circle counter
             for contour in contoursMarkers:
-                  if cv2.contourArea(contour)>1000: #and cv2.contourArea(contour)<50000:  # Skip small contours
+                  if cv2.contourArea(contour)>500: #and cv2.contourArea(contour)<50000:  # Skip small contours
                         epsilon = 0.03 * cv2.arcLength(contour, True)  # Calculate the perimeter of the contour
                         
                         # Approximate the contour

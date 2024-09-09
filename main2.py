@@ -23,19 +23,19 @@ def main(): # Main function
       cap = vision.initialize_camera()
       while(1):
             img,imgHSV,robotview = vision.Capturing()
-            imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            #imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
             #contoursItem, ItemMask = vision.findItems(imgHSV)
             #xi1, yi1, xi2, yi2 = vision.GetContoursObject(contoursItem, robotview, (0, 255, 0), "Item", Draw = True)
 
-            contoursShelf, ShelfMask = vision.findShelf(imgHSV)
-            xs1, ys1, xs2, ys2 = vision.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "Shelf", Draw = True)
+            #contoursShelf, ShelfMask = vision.findShelf(imgHSV)
+            #xs1, ys1, xs2, ys2 = vision.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "Shelf", Draw = True)
 
-            contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
-            xo1, yo1, xo2, yo2 = vision.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obstacle", Draw = True)
+            #contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
+            #xo1, yo1, xo2, yo2 = vision.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obstacle", Draw = True)
 
-            contoursLoading, LoadingMask = vision.findLoadingArea(imgHSV)
-            xl1, yl1, xl2, yl2 = vision.GetContoursShelf(contoursLoading, robotview, (120, 120, 255), "LoadingArea", Draw = True)
+            #contoursLoading, LoadingMask = vision.findLoadingArea(imgHSV)
+            #xl1, yl1, xl2, yl2 = vision.GetContoursShelf(contoursLoading, robotview, (120, 120, 255), "LoadingArea", Draw = True)
 
             vision.ExportImage("RobotView", robotview, FPS = True)
             #vision.ExportImage("WallMask", BlackMask, FPS = True)

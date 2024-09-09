@@ -32,15 +32,15 @@ class VisionModule:
         frame = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
         return frame
 
-    def initialize_camera(self, frame_height=640, frame_width=480, format='XRGB8888'):
+    def initialize_camera(self, frame_height=820, frame_width=616, format='XRGB8888'):
         # Create a camera object and store it as an instance variable
         self.cap = picamera2.Picamera2()
         config = self.cap.create_video_configuration(main={"format": format, "size": (frame_height, frame_width)})
         self.cap.configure(config)
    
         
-        self.cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
-        #self.cap.set_controls({"ExposureTime": 50000, "AnalogueGain": 1,  "ColourGains": (1.4,1.5)})
+       # self.cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
+        self.cap.set_controls({"ExposureTime": 100000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
         self.image_width = frame_width
         self.image_center = self.image_width // 2 # Calculate the center of the image
         self.cap.start()
