@@ -17,7 +17,7 @@ def main(): # Main function
       while(1):
             img,imgHSV,robotview = vision.Capturing()
             imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
+            print(img.shape)
             #contoursItem, ItemMask = vision.findItems(imgHSV)
             #xi1, yi1, xi2, yi2 = vision.GetContoursObject(contoursItem, robotview, (0, 255, 0), "Item", Draw = True)
 

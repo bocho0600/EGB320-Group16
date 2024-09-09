@@ -23,6 +23,7 @@ def main(): # Main function
       cap = vision.initialize_camera()
       while(1):
             img,imgHSV,robotview = vision.Capturing()
+            print(img.shape)
             #imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
             #contoursItem, ItemMask = vision.findItems(imgHSV)
