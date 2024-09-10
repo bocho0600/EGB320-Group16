@@ -116,7 +116,7 @@ class VisionModule:
 		detected_shapes = []  # List to store detected shape information
 		shape = None
 		for contour in contoursMarkers:
-			if cv2.contourArea(contour)>300 and cv2.contourArea(contour) < 1000:  # Skip small contours
+			if cv2.contourArea(contour)>150 and cv2.contourArea(contour) < 10000:  # Skip small contours
 				epsilon = 0.04 * cv2.arcLength(contour, True)  # Calculate the perimeter of the contour
 				# Approximate the contour
 				ShapeContours = cv2.approxPolyDP(contour, epsilon, True)
@@ -125,7 +125,7 @@ class VisionModule:
 				# Identify the shape based on the number of vertices
 				if num_vertices == 4:
 					shape = "Square"
-				elif num_vertices > 4 and num_vertices < 8:
+				elif num_vertices > 4 and num_vertices < 12:
 					shape = "Circle"  # Assuming more than 4 sides is a circle for simplicity
 				else:
 					shape = "Unknown"
@@ -199,5 +199,34 @@ class VisionModule:
 			return (cls.focal_length * cls.real_circle_diameter) / length
 		elif shape == "Square":
 			return (cls.focal_length * cls.square_width) / length
-		
 
+	@classmethod
+	def ProcessAisleMarkers(cls, detected_shapes):
+		# return aisle, distance, bearing
+		# detected_shapes if a list of tuples (ShapeContours, shape), shape in ["Square", "Circle"]
+		if len(detected_shapes) == 0:
+			return 0, None, None, None, None
+		
+		if "Square" in [s[1] for s in detected_shapes]:
+			return 0, None, None, None, None
+
+		dists = []
+		xs = []
+		ys = []
+		for contour, shape in detected_shapes:
+			if shape != "Circle":
+				return 0, None, None, None, None
+			
+			(x_center, y_center), radius = cv2.minEnclosingCircle(contour)
+			diameter = 2 * radius  # Diameter is twice the radius
+			dists.append(cls.GetDistance(diameter, shape))
+			xs.append(x_center)
+			ys.append(y_center)
+		
+		distance = np.array(dists).mean()
+		x_center = np.array(xs).mean()
+		y_center = np.array(ys).mean()
+
+		return len(detected_shapes), distance, (x_center/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL, x_center, y_center
+
+		

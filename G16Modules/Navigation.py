@@ -481,6 +481,18 @@ class NavigationModule:
 
 		times.append(time.time()) ##########################
 
+		black_mask = VisionModule.findBlack(img_HSV)
+		marker_contours, _ = cv2.findContours(black_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+		detected_shapes, _, _ = VisionModule.MarkersDetection(marker_contours, None, None, False)
+		aisle, aisle_distance, aisle_bearing, marker_x, marker_y = VisionModule.ProcessAisleMarkers(detected_shapes)
+
+		if aisle != 0:
+			cv2.drawMarker(debug_img, (int(marker_x), int(marker_y)), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
+
+		print(aisle, aisle_distance, aisle_bearing)
+
+
+
 		if points is not None and points.size > 0:
 			# draw
 			debug_img = cv2.polylines(debug_img, [points], False, (0, 0, 255), 1) # draw
@@ -505,12 +517,13 @@ class NavigationModule:
 			debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 			
 			cls.forced_avoidance_timer_update(forward_vel/5, delta)
-			cls.set_velocity(forward_vel/5,rotational_vel/5)
+			# cls.set_velocity(forward_vel/5,rotational_vel/5)
 		else:
-			cls.set_velocity(0,0)
+			# cls.set_velocity(0,0)
+			pass
 
 		times.append(time.time()) ##########################
-		print([times[i+1] - t for i,t in enumerate(times) if i < len(times)-1])
+		#print([times[i+1] - t for i,t in enumerate(times) if i < len(times)-1])
 
 		cv2.imshow("res", debug_img)
 		cv2.waitKey(1)
