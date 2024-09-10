@@ -49,6 +49,9 @@ class Navigation:
 	@classmethod
 	def initialise_callbacks(cls):
 		cls.state_callbacks[STATE.WANDER] = (cls.wander_start, cls.wander_update)
+		cls.state_callbacks[STATE.AISLE_DOWN] = (cls.aisle_down_start, cls.aisle_down_update)
+		cls.state_callbacks[STATE.FACE_BAY] = (cls.face_bay_start, cls.face_bay_update)
+		cls.state_callbacks[STATE.COLLECT_ITEM] = (cls.collect_item_start, cls.collect_item_update)
 	
 	#region Utility Functions
 	@classmethod
@@ -153,9 +156,7 @@ class Navigation:
 
 	@staticmethod
 	def combine_contour_points(contours):
-		# Are must be greater then 200. Then, sort the remaining ones by their area
-		contours = [cont for cont in contours if cv2.contourArea(cont) > 200]
-		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
+
 		
 		combined_contour = None
 		xmax = -1
@@ -300,6 +301,11 @@ class Navigation:
 
 		# exclude small areas and consider in order of size
 		contour, mask = Vision.findFloor(img)
+
+		# Are must be greater then 200. Then, sort the remaining ones by their area
+		contour = [cont for cont in contour if cv2.contourArea(cont) > 200]
+		contour = sorted(contour, key=lambda cont: -cv2.contourArea(cont))
+
 		floor_contour = cls.combine_contour_points(contour)
 		floor_contour, projected_floor = cls.project_and_filter_contour(floor_contour)
 
@@ -357,4 +363,63 @@ class Navigation:
 		cls.set_velocity(forward_vel,rotational_vel)
 
 		return STATE.WANDER
+	
+	
+	@classmethod
+	def aisle_down_start(cls):
+		pass
+
+	@classmethod
+	def aisle_down_update(cls):
+
+		img = Vision.get_image()
+		img_HSV = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+		debug_img = img.copy()
+
+		# exclude small areas and consider in order of size
+		contour, mask = Vision.findShelf(img_HSV, 250)
+		debug_img = cv2.drawContours(debug_img, contour, -1, (0, 255, 0), 2) 
+  
+		# Are must be greater then 200. Then, sort the remaining ones by their area
+		#contour = [cont for cont in contour if cv2.contourArea(cont) > 200]
+		contour = sorted(contour, key=lambda cont: -cv2.contourArea(cont))
+
+		shelf_contour = cls.combine_contour_points(contour)
+		shelf_contour, projected_floor = cls.project_and_filter_contour(shelf_contour)
+
+		if shelf_contour is not None and shelf_contour.size > 0:
+			# draw
+			debug_img = cv2.polylines(debug_img, [shelf_contour], False, (0, 0, 255), 1) # draw
+
+			dist_map = cls.get_dist_map(shelf_contour, projected_floor)
+
+
+			
+			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+
+
+			
+
+		cv2.imshow("res", debug_img)
+		cv2.waitKey(1)
+
+
+		return STATE.AISLE_DOWN
+	
+	@classmethod
+	def face_bay_start(cls):
+		pass
+	
+	@classmethod
+	def face_bay_update(cls):
+		return STATE.FACE_BAY
+
+	@classmethod
+	def collect_item_start(cls):
+		pass
+	
+	@classmethod
+	def collect_item_update(cls):
+		return STATE.COLLECT_ITEM
+	
 	#endregion

@@ -47,7 +47,7 @@ if __name__ == '__main__':
 			return img
 
 		# we need to tell RobotStateMachine how to get the image and how to set target velocities
-		RobotStateMachine.init(get_image, lambda fwd, rot: packerBotSim.SetTargetVelocities(fwd, -rot))		
+		RobotStateMachine.init(STATE.AISLE_DOWN, get_image, lambda fwd, rot: packerBotSim.SetTargetVelocities(fwd, -rot))		
 		
 
 		while True:

@@ -9,8 +9,10 @@ class RobotStateMachine:
 	current_state = STATE.WANDER
 
 	@classmethod
-	def init(cls, get_image_callback, set_velocity_callback):
+	def init(cls, initial_state = STATE.WANDER, get_image_callback = None, set_velocity_callback = None):
 		# Initialise vision and navigation 
+
+		cls.current_state = initial_state
 		Vision.get_image_callback = get_image_callback
 		
 
