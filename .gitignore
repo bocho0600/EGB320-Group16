@@ -4,6 +4,7 @@ __pycache__/
 
 # C extensions
 *.so
+!COPPELIA_FILES/PythonCode/remoteApi*.so
 
 # Distribution / packaging
 .Python
