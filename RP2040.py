@@ -51,7 +51,7 @@ class I2C:
             ascii_array = self.string_to_ascii_array(command)
             self.bus.write_i2c_block_data(self.addr, 0, ascii_array)
         except Exception as e:
-            print(f"Error sending servo command: {e}")\
+            print(f"Error sending servo command: {e}")
     
     def DCWrite(self, number, direction, speed):
         # Validate inputs
@@ -66,7 +66,12 @@ class I2C:
             return
         command = f"M{number} {direction} {speed}"
         print(f"Sending command to servo: {command}")
-
+        try:
+            # Send the command to the Arduino
+            ascii_array = self.string_to_ascii_array(command)
+            self.bus.write_i2c_block_data(self.addr, 0, ascii_array)
+        except Exception as e:
+            print(f"Error sending servo command: {e}")
 
 
 

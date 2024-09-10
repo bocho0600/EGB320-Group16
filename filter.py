@@ -1,9 +1,9 @@
 import cv2
 import picamera2
 import numpy as np
-from threading import Thread
+from threading import Thread, Lock
 import time
-
+import vision as vs
 # Define the runVision function (can be customized as needed)
 def runVision():
     # Placeholder for vision processing logic
@@ -31,6 +31,7 @@ class CamFrameGrabber:
         self.gotFrame = False
         self.currentFrame = np.zeros((height, width, 3), np.uint8)
         self.frameid = 0  # Initialize frame ID
+        self.lock = Lock()  # Create a lock for thread safety
         
         # Capture the first frame
         self.currentFrame = self.camera.capture_array()
@@ -46,12 +47,15 @@ class CamFrameGrabber:
             if self.cameraStopped:
                 return
             # Capture frame from the camera
-            self.currentFrame = self.camera.capture_array()
+            frame = self.camera.capture_array()
+            with self.lock:
+                self.currentFrame = frame  # Safely update the frame
             self.frameid += 1  # Increment the frame ID after capturing each frame
 
     def getCurrentFrame(self):
-        # Return the current frame
-        return self.currentFrame
+        # Safely return the current frame
+        with self.lock:
+            return self.currentFrame.copy()
 
     def getFrameID(self):
         # Return the current frame ID
@@ -61,9 +65,12 @@ class CamFrameGrabber:
         # Stop the camera capture
         self.cameraStopped = True
 
+    def Displaying(self, WindowName, imgRGB):
+        # Display the frame using OpenCV
+        cv2.imshow(WindowName, imgRGB)
+
     def __del__(self):
-        # Release the camera and clean up OpenCV windows
-        self.camera.release()
+        # Clean up OpenCV windows
         cv2.destroyAllWindows()
 
 # Main function to demonstrate the usage of CamFrameGrabber
@@ -78,31 +85,13 @@ def main():
     # Start capturing frames
     cam.start()
     
-    # Create a window to display the frames
-    #cv2.namedWindow("Camera Feed", cv2.WINDOW_NORMAL)
-    
-    previous_frame_id = -1  # Store the previous frame ID for comparison
-    
     try:
         while True:
-            # Start measuring time at the beginning of the frame capture process
-            t1 = time.time()  
-            
             # Get the current frame and frame ID
             frame = cam.getCurrentFrame()
-            current_frame_id = cam.getFrameID()
             
-            # Only display the frame if the frame ID is different from the previous one
-            if current_frame_id != previous_frame_id:
-                # Display the frame using OpenCV
-                cv2.imshow("Camera Feed", frame)
-                
-                # Update the previous frame ID
-                previous_frame_id = current_frame_id
-                
-                # Calculate and print the FPS (after the frame has been displayed)
-                fps = 1.0 / (time.time() - t1)  # calculate frame rate
-                print(f"FPS: {fps:.2f}")
+            # Display the frame
+            cam.Displaying("testing", frame)
             
             # Break the loop if 'q' is pressed
             if cv2.waitKey(1) & 0xFF == ord('q'):

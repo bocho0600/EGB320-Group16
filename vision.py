@@ -2,7 +2,7 @@ import cv2
 import picamera2
 import numpy as np
 import time
-from threading import Thread
+#from threading import Thread
 # MADE BY KELVIN LE, QUT EGB320 GROUP16 
 # StudentID: n11429984
 # Email: minhnguyen.le@qut.edu.au
@@ -12,16 +12,16 @@ class VisionModule:
         'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
         'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
         'yellow': (np.array([25, 90, 0]), np.array([36, 233, 255])),
-        'blue': (np.array([104, 85, 0]), np.array([123, 255, 255])),
-        'green': (np.array([30, 36, 0]), np.array([96, 255, 226])),
+        'blue': (np.array([81, 0, 0]), np.array([116, 255, 255])),
+        'green': (np.array([55, 79, 0]), np.array([70, 255, 255])),
         'orange1': (np.array([0, 100, 0]), np.array([20, 255, 255])),
         'orange2': (np.array([165, 100, 0]), np.array([180, 255, 255])),
-        'black': (np.array([0, 0, 43]), np.array([127, 123, 105]))
+        'black': (np.array([29,53, 0]), np.array([51, 103, 81]))
     }
 
 
-    focal_length = 50 #cm
-    real_circle_diameter = 40 #cm
+    focal_length = 70 #cm
+    real_circle_diameter = 70 #cm
 
     def __init__(self):
         self.cap = None  # Initialize the camera object as an instance variable
@@ -39,8 +39,10 @@ class VisionModule:
         self.cap.configure(config)
    
         
-       # self.cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
-        self.cap.set_controls({"ExposureTime": 100000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
+        #self.cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
+        self.cap.set_controls({"ExposureTime": 70000, "AnalogueGain": 1,  "ColourGains": (1.4,1.5)}) 
+        #self.cap.set_controls({"ExposureTime": 100000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
+        #self.cap.set_controls({"ExposureTime": 70000, "AnalogueGain": 1,  "ColourGains": (1.4,1.5)}) 
         self.image_width = frame_width
         self.image_center = self.image_width // 2 # Calculate the center of the image
         self.cap.start()
@@ -87,7 +89,7 @@ class VisionModule:
         # Filter out small contours by area
         filtered_contours = [cnt for cnt in contoursShelf if cv2.contourArea(cnt) > area_threshold]
         
-        return filtered_contours, ShelfMask
+        return contoursShelf, ShelfMask
 
     def findLoadingArea(self, imgHSV):
         LoadingAreaMask = cv2.inRange(imgHSV, self.color_ranges['yellow'][0], self.color_ranges['yellow'][1])
@@ -194,11 +196,8 @@ class VisionModule:
         else:
             return  None, None, None, None
     
-    def GetDistance(self, length, shape):
-        if shape == "Circle":
-            return (self.focal_length * self.real_circle_diameter) / length
-        elif shape == "Square":
-            return (self.focal_length * self.square_width) / length
+    def GetDistance(self, width, real_width):
+        return (self.focal_length * real_width) / width + 4
         
 
 # Define the CamFrameGrabber class
@@ -229,6 +228,7 @@ class CamFrameGrabber:
 
     def start(self):
         # Start the image capturing thread
+        self.previous_frame_id = -1
         Thread(target=self.captureImage, args=()).start()  # Running the camera capturing in background threads
         return self
 
@@ -252,6 +252,27 @@ class CamFrameGrabber:
     def stop(self):
         # Stop the camera capture
         self.cameraStopped = True
+
+
+    def Displaying(self, WindowName, imgRGB):
+        # Initialize previous_frame_id if it hasn't been initialized yet
+        if not hasattr(self, 'previous_frame_id'):
+            self.previous_frame_id = -1
+        
+        current_frame_id = self.getFrameID()
+        
+        # Only display the frame if the frame ID is different from the previous one
+        if current_frame_id != self.previous_frame_id:
+            # Display the frame using OpenCV
+            cv2.imshow(WindowName, imgRGB)
+        
+        # Update the previous frame ID
+        self.previous_frame_id = current_frame_id
+
+
+
+
+
 
     def __del__(self):
         # Release the camera and clean up OpenCV windows

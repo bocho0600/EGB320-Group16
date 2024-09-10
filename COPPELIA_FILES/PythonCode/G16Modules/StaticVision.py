@@ -32,6 +32,9 @@ class VisionModule:
         frame = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
         return frame
 
+    @classmethod 
+    def get_image(cls):
+        return cls.CaptureImage()
     
     @classmethod
     def initialize_camera(cls, frame_height=820, frame_width=616, format='XRGB8888'):
