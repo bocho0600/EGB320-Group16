@@ -23,65 +23,73 @@ class VisionModule:
     focal_length = 70 #cm
     real_circle_diameter = 70 #cm
 
-    def __init__(self):
-        self.cap = None  # Initialize the camera object as an instance variable
-        self.t1 = None
+    @classmethod
+    def init(cls):
+        cls.cap = None  # Initialize the camera object as an instance variable
+        cls.t1 = None
 
-    def CaptureImage(self):
-        frame = self.cap.capture_array()  # Use the instance variable
-        frame = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
-        return frame
+    @classmethod
+    def CaptureImage(cls):
+        cls.frame = cls.cap.capture_array()  # Capture an image from the camera
+        cls.frame = cv2.flip(cls.frame, 0)  # OPTIONAL: Flip the image vertically
+        return cls.frame
 
-    def initialize_camera(self, frame_height=820, frame_width=616, format='XRGB8888'):
+    @classmethod
+    def initialize_camera(cls, frame_width=820, frame_height=616, format='XRGB8888'):
         # Create a camera object and store it as an instance variable
-        self.cap = picamera2.Picamera2()
-        config = self.cap.create_video_configuration(main={"format": format, "size": (frame_height, frame_width)})
-        self.cap.configure(config)
+        cls.cap = picamera2.Picamera2()
+        config = cls.cap.create_video_configuration(main={"format": format, "size": (frame_width, frame_height)})
+        cls.cap.configure(config)
    
         
-        #self.cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
-        self.cap.set_controls({"ExposureTime": 70000, "AnalogueGain": 1,  "ColourGains": (1.4,1.5)}) 
-        #self.cap.set_controls({"ExposureTime": 100000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
-        #self.cap.set_controls({"ExposureTime": 70000, "AnalogueGain": 1,  "ColourGains": (1.4,1.5)}) 
-        self.image_width = frame_width
-        self.image_center = self.image_width // 2 # Calculate the center of the image
-        self.cap.start()
+        #cls.cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
+        cls.cap.set_controls({"ExposureTime": 70000, "AnalogueGain": 1,  "ColourGains": (1.4,1.5)}) 
+        #cls.cap.set_controls({"ExposureTime": 100000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
+        #cls.cap.set_controls({"ExposureTime": 70000, "AnalogueGain": 1,  "ColourGains": (1.4,1.5)}) 
+        cls.image_width = frame_width
+        cls.image_center = cls.image_width // 2 # Calculate the center of the image
+        cls.cap.start()
 
-    def Capturing(self):
-        self.t1 = time.time()  # For measuring FPS
-        img = self.CaptureImage()  # Capture a single image frame
+    @classmethod
+    def Capturing(cls):
+        cls.t1 = time.time()  # For measuring FPS
+        img = cls.CaptureImage()  # Capture a single image frame
         imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
         #imgHSV = cv2.erode(imgHSV, kernel, iterations=1)
         #imgHSV = cv2.dilate(imgHSV, kernel, iterations=1)
         robotview = img.copy()  # Preserve the original image
         return img, imgHSV, robotview
 
-    def ExportImage(self, WindowName, view, FPS=False):
+    @classmethod
+    def ExportImage(cls, WindowName, view, FPS=False):
         if FPS:
-            fps = 1.0 / (time.time() - self.t1)  # calculate frame rate
+            fps = 1.0 / (time.time() - cls.t1)  # calculate frame rate
             cv2.putText(view, f'{int(fps)}', (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 100), 2)  # Display the FPS on the screen
 
         cv2.imshow(WindowName, view)
 
-    def findBlack(self, imgHSV):
+    @classmethod
+    def findBlack(cls, imgHSV):
         # Create masks for the orange color
         #HSV90 = cv2.rotate(imgHSV, cv2.ROTATE_180)
-        BlackMask = cv2.inRange(imgHSV, self.color_ranges['black'][0], self.color_ranges['black'][1])
+        BlackMask = cv2.inRange(imgHSV, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
         #contoursBlack, _ = cv2.findContours(ItemMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return BlackMask
 
-    def findItems(self, imgHSV):
+    @classmethod
+    def findItems(cls, imgHSV):
         # Create masks for the orange color
         #HSV90 = cv2.rotate(imgHSV, cv2.ROTATE_180)
-        ItemMask1 = cv2.inRange(imgHSV, self.color_ranges['orange1'][0], self.color_ranges['orange1'][1])
-        ItemMask2 = cv2.inRange(imgHSV, self.color_ranges['orange2'][0], self.color_ranges['orange2'][1])
+        ItemMask1 = cv2.inRange(imgHSV, cls.color_ranges['orange1'][0], cls.color_ranges['orange1'][1])
+        ItemMask2 = cv2.inRange(imgHSV, cls.color_ranges['orange2'][0], cls.color_ranges['orange2'][1])
         ItemMask = ItemMask1 | ItemMask2  # Combine masks
         contoursItem, _ = cv2.findContours(ItemMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursItem, ItemMask
 
-    def findShelf(self, imgHSV, area_threshold=10000):
+    @classmethod
+    def findShelf(cls, imgHSV, area_threshold=10000):
         # Create a mask for the blue color range
-        ShelfMask = cv2.inRange(imgHSV, self.color_ranges['blue'][0], self.color_ranges['blue'][1])
+        ShelfMask = cv2.inRange(imgHSV, cls.color_ranges['blue'][0], cls.color_ranges['blue'][1])
         
         # Find contours on the mask
         contoursShelf, _ = cv2.findContours(ShelfMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -91,17 +99,20 @@ class VisionModule:
         
         return contoursShelf, ShelfMask
 
-    def findLoadingArea(self, imgHSV):
-        LoadingAreaMask = cv2.inRange(imgHSV, self.color_ranges['yellow'][0], self.color_ranges['yellow'][1])
+    @classmethod
+    def findLoadingArea(cls, imgHSV):
+        LoadingAreaMask = cv2.inRange(imgHSV, cls.color_ranges['yellow'][0], cls.color_ranges['yellow'][1])
         contoursLoadingArea, _ = cv2.findContours(LoadingAreaMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursLoadingArea, LoadingAreaMask
 
-    def findObstacle(self, imgHSV):
-        ObstacleMask = cv2.inRange(imgHSV, self.color_ranges['green'][0], self.color_ranges['green'][1])
+    @classmethod
+    def findObstacle(cls, imgHSV):
+        ObstacleMask = cv2.inRange(imgHSV, cls.color_ranges['green'][0], cls.color_ranges['green'][1])
         contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contoursObstacle, ObstacleMask
     
-    def findWall(self, imgGray, imgRGB):
+    @classmethod
+    def findWall(cls, imgGray, imgRGB):
         _, WhiteMask = cv2.threshold(imgGray, 165, 255, cv2.THRESH_BINARY) # Apply thresholding to get white colour filter
         WallMask = np.zeros_like(imgGray) # Create an empty mask for the wall
         contours, _ = cv2.findContours(WhiteMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -116,39 +127,75 @@ class VisionModule:
         contoursMarkers, _ = cv2.findContours(WallImage, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         return WallMask, contoursMarkers, WallImage
 
-    def MarkersDetection(self, contoursMarkers, output, colour, Draw=True):
-        shape_count = 0  # Initialize the shape counter
-        detected_shapes = []  # List to store detected shape information
-        shape = None
+    @classmethod
+    def findMarkers(cls,imgHSV):
+        BlackMask = cv2.inRange(imgHSV, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+        contoursMarkers, MarkerMask = cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        return contoursMarkers, MarkerMask
+
+
+
+    @classmethod
+    def findMarkers(cls,imgHSV):
+        BlackMask = cv2.inRange(imgHSV, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+        contoursMarkers, MarkerMask = cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        return contoursMarkers, MarkerMask
+
+    @classmethod
+    def MarkerShapeDetection(cls, contoursMarkers, output):
+        detected = False
+        shapeCount = 0
+        distances = []  # List to store distances for all detected circles
+        bearings = []
+        xs = []
+        ys = []
         for contour in contoursMarkers:
-            if cv2.contourArea(contour)>300 and cv2.contourArea(contour) < 1000:  # Skip small contours
-                epsilon = 0.04 * cv2.arcLength(contour, True)  # Calculate the perimeter of the contour
-                # Approximate the contour
+            if cv2.contourArea(contour) > 300 and cv2.contourArea(contour) < 50000:
+                epsilon = 0.03 * cv2.arcLength(contour, True)
                 ShapeContours = cv2.approxPolyDP(contour, epsilon, True)
-                # Determine the number of vertices
                 num_vertices = len(ShapeContours)
-                # Identify the shape based on the number of vertices
                 if num_vertices == 4:
                     shape = "Square"
-                elif num_vertices > 4 and num_vertices < 8:
-                    shape = "Circle"  # Assuming more than 4 sides is a circle for simplicity
-                else:
-                    shape = "Unknown"
+                elif num_vertices in [4, 12]:
+                    shape = "Circle"
+                    shapeCount += 1
+                    (x_center, y_center), radius = cv2.minEnclosingCircle(contour)
+                    diameter = 2 * radius
+                    distance = cls.GetDistance(diameter, 70)
+                    bearing = cls.GetBearing(x_center)
 
-                # Only recognize squares and circles
-                if shape in ["Square", "Circle"]:
-                    shape_count += 1  # Increment the counter
-                    detected_shapes.append((ShapeContours, shape))  # Store shape details
-                    if Draw:
-                        cv2.drawContours(output, [ShapeContours], -1, colour, 3)
-                        x, y = ShapeContours.ravel()[0], ShapeContours.ravel()[1]
-                        cv2.putText(output, shape, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
+                    distances.append(distance)  # Store each distance
+                    bearings.append(bearing)
+                    xs.append(x_center)
+                    ys.append(y_center)
+                    
+                    cv2.putText(output, f"Distance: {distance} cm", (x_center, y_center), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (123, 200, 100), 2)
+                    cv2.putText(output, f"Circle: {shapeCount}", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
+                    cv2.circle(output, (int(x_center), int(y_center)), int(radius), (0, 255, 0), 2)
+                    detected = True
 
-        # Return all detected shapes and the shape count
-        return detected_shapes, shape_count, shape
-    
+        if detected:
+            return shapeCount, distances, bearings, xs, ys  # Return list of distances
+        else:
+            return None, [], [], [], []  # Return empty list if no circles detected
 
-    def GetContoursShelf(self, contours, output, colour, text, Draw=True):
+    @classmethod
+    def ProcessAisleMarkers(cls, shapeCount, distances, bearings, xs, ys):
+        # return aisle, distance, bearing
+        # detected_shapes if a list of tuples (ShapeContours, shape), shape in ["Square", "Circle"]
+        if shapeCount == 0:
+            return 0, None, None, None, None
+                
+        distance = np.array(distances).mean()
+        bearing = np.array(bearings).mean()
+        x_center = np.array(xs).mean()
+        y_center = np.array(ys).mean()
+
+        return shapeCount, distance, bearing, x_center, y_center
+  
+
+    @classmethod
+    def GetContoursShelf(cls, contours, output, colour, text, Draw=True):
         detected = False
         center = (0, 0)
         radius = 0
@@ -181,7 +228,8 @@ class VisionModule:
         else:
             return None, None, None, None
         
-    def GetContoursObject(self, contours, output, colour, text, Draw = True):
+    @classmethod
+    def GetContoursObject(cls, contours, output, colour, text, Draw = True):
         detected = False
         for contour in contours:
             if cv2.contourArea(contour) > 500:
@@ -191,14 +239,19 @@ class VisionModule:
                     cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 detected = True
         if detected:
-            x1, y1, x2, y2 = x, y, x + width, y + height
-            return x1, y1, x2, y2
+            x_center, y_center = x + width // 2, y + height // 2
+            return x_center, y_center
         else:
-            return  None, None, None, None
+            return  None, None
     
-    def GetDistance(self, width, real_width):
-        return (self.focal_length * real_width) / width + 4
-        
+    @classmethod
+    def GetDistance(cls, width, real_width):
+        return (cls.focal_length * real_width) / width + 4
+    
+    @classmethod
+    def GetBearing(cls, x_center):
+        offset_pixels = x_center - cls.frame.shape[0]/ 2
+        return (offset_pixels / cls.frame.shape[0]) * 22.3
 
 # Define the CamFrameGrabber class
 class CamFrameGrabber:
