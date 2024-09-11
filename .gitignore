@@ -1,9 +1,11 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+!COPPELIA_FILES/PythonCode/roverbot_lib.pyc
 
 # C extensions
 *.so
+!COPPELIA_FILES/PythonCode/remoteApi*.so
 
 # Distribution / packaging
 .Python
@@ -52,3 +54,4 @@ docs/_build/
 
 # PyBuilder
 target/
+.vscode/launch.json

@@ -5,10 +5,10 @@ import time
 import csvread as csvread
 
 
-from COPPELIA_FILES.PythonCode.G16Modules.Globals import *
-from COPPELIA_FILES.PythonCode.G16Modules.Navigation import Navigation, STATE, PHASE
-from COPPELIA_FILES.PythonCode.G16Modules.StaticVision import VisionModule
-from COPPELIA_FILES.PythonCode.G16Modules.RobotStateMachine import RobotStateMachine
+from G16Modules.Globals import *
+from G16Modules.Navigation import NavigationModule, STATE, PHASE
+from G16Modules.Vision import VisionModule
+from G16Modules.RobotStateMachine import RobotStateMachine
 
 color_ranges = {
 		'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
