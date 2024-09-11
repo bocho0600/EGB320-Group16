@@ -1,16 +1,21 @@
 import cv2
 import numpy as np
 import time
-from vision import VisionModule
+from G16Modules.Globals import *
+from G16Modules.Vision import VisionModule, CamFrameGrabber
+#from G16Modules.Navigation import NavigationModule, STATE
 import RP2040 as I2C
-import csv 
 import csvread as csvread
-import picamera2
-from sys import argv
+
 
 def main(): # Main function
-      i2c = I2C.I2C()
-      cap = VisionModule.initialize_camera()
+      #i2c = I2C.I2C()
+      cap = Specific.initialize_camera()
+      cam = CamFrameGrabber(SCREEN_WIDTH, SCREEN_HEIGHT)
+      VisionModule.setGrabber(cam)
+
+      cam.start()
+
       while(1):
             img,imgHSV,robotview = VisionModule.Capturing()
 
@@ -26,9 +31,9 @@ def main(): # Main function
             # contoursLoading, LoadingMask = VisionModule.findLoadingArea(imgHSV)
             # xl1, yl1, xl2, yl2 = VisionModule.GetContoursShelf(contoursLoading, robotview, (120, 120, 255), "LoadingArea", Draw = True)
 
-            contoursMarkers, MarkerMask = VisionModule.findMarkers(imgHSV)
-            shapeCount, distances, bearings, xs, ys = VisionModule.MarkerShapeDetection(contoursMarkers, robotview)
-            aisleNumber, distance, bearing, x_center, y_center = VisionModule.ProcessAisleMarkers(shapeCount, distances, bearings, xs, ys)
+            # contoursMarkers, MarkerMask = VisionModule.findMarkers(imgHSV)
+            # shapeCount, distances, bearings, xs, ys = VisionModule.MarkerShapeDetection(contoursMarkers, robotview)
+            # aisleNumber, distance, bearing, x_center, y_center = VisionModule.ProcessAisleMarkers(shapeCount, distances, bearings, xs, ys)
 
 
         
@@ -36,6 +41,7 @@ def main(): # Main function
 
             if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
                   break
+      cam.stop()
       cap.close()
 
 if __name__ == "__main__": # Run the main function

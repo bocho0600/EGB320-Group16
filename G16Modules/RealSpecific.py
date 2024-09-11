@@ -6,16 +6,26 @@ class RealSpecific:
 	cap = None
 
 	@classmethod
-	def CaptureImage(cls):
+	def CaptureFrame(cls):
+		# Run in the thread called by CamFrameGrabber
 		frame = cls.cap.capture_array()  # Use the instance variable
-		frame = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
+		return frame
+
+	@classmethod
+	def CaptureFrameAsync(cls, sig_function):
+		# Run in the thread called by CamFrameGrabber
+
+		frame = cls.cap.capture_array(signal_function = sig_function)  # Use the instance variable
+		return frame
+
+	@classmethod
+	def ConvertImage(cls, frame):
+		# Run in main, called after frame is transferred
+		img = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
 		img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
 		
 		frameHSV = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)  # Convert to HSV
 		return frame, frameHSV
-
-	# alias
-	get_image = CaptureImage
 	
 	@classmethod
 	def initialize_camera(cls, frame_height=820, frame_width=616, format='XRGB8888'):
@@ -26,7 +36,9 @@ class RealSpecific:
 		
 		
 		# cls.cap.set_controls({"ExposureTime": 11000, "AnalogueGain": 1.5,  "ColourGains": (1.22,2.12)})
-		cls.cap.set_controls({"ExposureTime": 100000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
+		# cls.cap.set_controls({"ExposureTime": 100000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
+		cls.cap.set_controls({"ExposureTime": 70000, "AnalogueGain": 1.0, "ColourGains": (1.4,1.5)})
+
 		cls.image_width = frame_width
 		cls.image_center = cls.image_width // 2 # Calculate the center of the image
 		cls.cap.start()
