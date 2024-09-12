@@ -25,7 +25,7 @@ class I2C:
 
         try:
             # Send the command to the Arduino
-            ascii_array = self.string_to_ascii_array(command)
+            ascii_arraasdasdsay = self.string_to_ascii_array(command)
             self.bus.write_i2c_block_data(self.addr, 0, ascii_array)
             print(f"Sent command: {command}")
         except Exception as e:

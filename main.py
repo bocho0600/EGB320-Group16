@@ -19,13 +19,13 @@ def main(): # Main function
       while(1):
             img,imgHSV,robotview = VisionModule.Capturing()
 
-            # contoursShelf, ShelfMask = VisionModule.findShelf(imgHSV)
-            # xs1, ys1, xs2, ys2 = VisionModule.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "Shelf", Draw = True)
+            contoursShelf, ShelfMask = VisionModule.findShelf(imgHSV)
+            xs1, ys1, xs2, ys2 = VisionModule.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "Shelf", Draw = True)
 
-            # contoursObstacle, ObstacleMask = VisionModule.findObstacle(imgHSV)
-            # x_ObstacleCenter, y_ObstacleCenter  = VisionModule.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obstacle", Draw = True)
-            # if x_ObstacleCenter != None:
-            #       ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter)
+            contoursObstacle, ObstacleMask = VisionModule.findObstacle(imgHSV)
+            x_ObstacleCenter, y_ObstacleCenter  = VisionModule.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obstacle", Draw = True)
+            if x_ObstacleCenter != None:
+                  ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter)
             
             
             # contoursLoading, LoadingMask = VisionModule.findLoadingArea(imgHSV)
