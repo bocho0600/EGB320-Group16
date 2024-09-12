@@ -1,6 +1,7 @@
 import picamera2
 import cv2
 from .Globals import *
+import time
 
 class RealSpecific:
 	cap = None
@@ -17,6 +18,11 @@ class RealSpecific:
 
 		frame = cls.cap.capture_array(signal_function = sig_function)  # Use the instance variable
 		return frame
+	
+	@classmethod
+	def cam_wait_job(cls, job):
+		result = cls.cap.wait(job)
+		return result
 
 	@classmethod
 	def ConvertImage(cls, frame):
@@ -24,8 +30,8 @@ class RealSpecific:
 		img = cv2.flip(frame, 0)  # OPTIONAL: Flip the image vertically
 		img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
 		
-		frameHSV = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)  # Convert to HSV
-		return frame, frameHSV
+		imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV
+		return img, imgHSV
 	
 	@classmethod
 	def initialize_camera(cls, frame_height=820, frame_width=616, format='XRGB8888'):
