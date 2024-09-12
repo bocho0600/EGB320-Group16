@@ -86,12 +86,24 @@ def main():
                   imgRGB, imgHSV, RobotView = cam.getCurrentFrame()
                   frame_id = cam.getFrameID()
 
+                  # Find contours for the shelves
                   contoursShelf, ShelfMask = vision.findShelf(imgHSV)
-                  ShelfCenter = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "She", Draw = True)
-                  if ShelfCenter != None:
-                        ShelfAngle = vision.GetBearing(ShelfCenter[1],imgRGB)
-                        cv2.putText(RobotView, f"Angle: {int(ShelfAngle)} cm", (int(ShelfCenter[0]), int(ShelfCenter[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
-                  
+                  # Get the detected shelf centers
+                  ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "Shelf", Draw=True)
+
+                  # If any shelves were detected
+                  if ShelfCenters is not None:
+                  # Loop through each detected shelf center
+                        for ShelfCenter in ShelfCenters:
+                              x_center, y_center = ShelfCenter
+                              
+                              # Calculate the bearing (angle) for each shelf
+                              ShelfAngle = vision.GetBearing(x_center, imgRGB)
+                              
+                              # Display the angle on the image
+                              cv2.putText(RobotView, f"Angle: {int(ShelfAngle)}", (int(x_center), int(y_center)), 
+                                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
+
                   # Detect obstacles in the HSV image
                   contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
 
@@ -113,20 +125,20 @@ def main():
                               cv2.putText(RobotView, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
 
                   
-                  # Assuming contoursMarkers is a list of contours found using cv2.findContours
-                  contoursMarkers, MarkerMask = vision.findMarkers(imgHSV)
+                  # Assuming contoursMarker is obtained from some previous processing step
+                  contoursMarker, MarkerMask = vision.findMarkers(imgHSV)
+                  marker_centers = vision.GetContoursMarker(contoursMarker, RobotView, (0, 255, 255), "M", Draw=True)
 
-                  # Get the list of detected markers' center and dimensions
-                  detected_markers = vision.GetContoursObject(contoursMarkers, RobotView, (0, 255, 255), "Circ", Draw=True)
+                  # Check if markers were detected
+                  if marker_centers is not None:
+                        for center in marker_centers:
+                              x_center, y_center, radius = center
+                              MarkerAngle = vision.GetBearing(x_center, imgRGB)
+                              MarkerDistance = vision.GetDistance(radius*2, 70)
+                              cv2.putText(RobotView, f"A: {int(MarkerAngle)} deg", (int(x_center), int(y_center + radius / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+                              cv2.putText(RobotView, f"D: {int(MarkerDistance)} cm", (int(x_center), int(y_center)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+                              #print(f"Marker detected at: ({x_center}, {y_center}) with radius: {radius}")
 
-                  if detected_markers is not None:
-                        for marker in detected_markers:
-                              x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
-                              MarkerAngle = vision.GetBearing(x_MarkerCenter, imgRGB)
-                              MarkerDistance = vision.GetDistance(MaHeight, 70)
-                              cv2.putText(RobotView, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-                              cv2.putText(RobotView, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
-                              # You can now process each marker as needed
 
                   
                   cam.DisplayFrame(RobotView,frame_id, FPS = True)
