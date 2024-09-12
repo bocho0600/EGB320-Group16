@@ -4,6 +4,13 @@ import cv2
 
 class SimSpecific:
 
+    # Specific should implement:
+	# get_frame
+	# set_velocity
+	# start
+	# update
+	# stop
+
     color_ranges = {
             'floor': (np.array([0, 0, 80]), np.array([0, 0, 135])),
             'wall': (np.array([0, 0, 146]), np.array([30, 1, 255])),
@@ -34,13 +41,11 @@ class SimSpecific:
         
         img = np.reshape((np.array(img).astype(np.uint8)), (480,640,3))
         img = cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 0)
-        img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT), cv2.INTER_NEAREST)
         imgHSV = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
         return img, imgHSV
-    
-    # alias
-    CaptureImage = get_image
+
     
     @classmethod
     def set_velocity(cls, fwd, rot):
