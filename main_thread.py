@@ -132,6 +132,7 @@ def main():
 
                   # Check if markers were detected
                   if marker_centers is not None:
+                      # Loop through each detected markers and process it
                         for center in marker_centers:
                               x_center, y_center, radius = center
                               MarkerAngle = vision.GetBearing(x_center, imgRGB)
