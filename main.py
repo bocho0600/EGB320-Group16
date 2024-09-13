@@ -21,7 +21,7 @@ def main(): # Main function
 	try:
 		
 		Specific.start()
-		NavigationModule.init(STATE.AISLE_DOWN, instruction[2]) # instruction 2 is aisle 2 bay 2
+		NavigationModule.init(STATE.WANDER, instruction[2]) # instruction 2 is aisle 2 bay 2
 
 		while True:
 			

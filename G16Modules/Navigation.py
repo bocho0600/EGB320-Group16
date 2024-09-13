@@ -205,7 +205,6 @@ class NavigationModule:
 			# Forced Avoidance
 			left_dist = dist_map[dist_map[:,1]>0][0,0]
 			right_dist = dist_map[dist_map[:,1]>0][-1,0]
-			print(f"{left_dist:.2f}, {right_dist:.2f}")
 			
 			change_in_left = left_dist - cls.last_left_dist
 			change_in_right = right_dist - cls.last_right_dist
@@ -214,11 +213,11 @@ class NavigationModule:
 			# (edge distance increased by 0.2 or more,  *this only works for shelves, if there are narrow obstacles it will be weird* )
 			if change_in_left > 0.2 and cls.last_left_dist < 0.4 and cls.last_fwd > 0:# and cls.last_rot > 0:
 				print("AVOID LEFT!")
-				cls.avoid_left = cls.last_left_dist * sin(pi/3)+0.2
+				cls.avoid_left = cls.last_left_dist * sin(FOV_HORIZONTAL)+0.2
 				cls.left_obstacle_dist = cls.last_left_dist
 			if change_in_right > 0.2 and cls.last_right_dist < 0.4 and cls.last_fwd > 0:# and cls.last_rot < 0:
 				print("AVOID RIGHT!")
-				cls.avoid_right = cls.last_right_dist * sin(pi/3)+0.2
+				cls.avoid_right = cls.last_right_dist * sin(FOV_HORIZONTAL)+0.2
 				cls.right_obstacle_dist = cls.last_right_dist
 
 			# if we are avoiding an obstacle just act like it is still there on the edge
@@ -280,13 +279,13 @@ class NavigationModule:
 			if abs(safety_map.max() - safety_map.min()) < 0.01:
 				# no safe path- turn and dont move forward
 				
-				goal_error = (dist_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
+				goal_error = (dist_map[:,0].argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
 				rotational_vel = goal_error*cls.Kp
 
 				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
 				forward_vel = 0
 
-				debug_img = cv2.drawMarker(debug_img, (dist_map.argmax(), int(SCREEN_HEIGHT - dist_map.max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
+				debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
 			else:
 				# move into the longest safe path
@@ -304,7 +303,7 @@ class NavigationModule:
 
 
 
-		cls.forced_avoidance_timer_update(forward_vel/5, delta*8)
+		cls.forced_avoidance_timer_update(forward_vel/5, delta)
 		cls.set_velocity(forward_vel/5,rotational_vel/5)
 
 		return STATE.WANDER, debug_img
