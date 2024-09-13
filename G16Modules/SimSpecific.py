@@ -40,7 +40,7 @@ class SimSpecific:
         _, img = cls.packerBotSim.GetCameraImage()
 
         
-        img = np.reshape((np.array(img).astype(np.uint8)), (480,640,3))
+        # img = np.reshape((np.array(img).astype(np.uint8)), (480,640,3))
         img = cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 0)
         img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT), cv2.INTER_NEAREST)
         imgHSV = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)

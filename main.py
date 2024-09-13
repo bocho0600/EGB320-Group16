@@ -19,9 +19,9 @@ def main(): # Main function
 	try:
 		
 		Specific.start()
-		instruction = instructions[1]
+		instruction = instructions[4] # 1 2 4
 		
-		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction) # instruction 2 is aisle 2 bay 2
+		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction)
 
 		while True:
 			

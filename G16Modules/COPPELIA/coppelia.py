@@ -4,6 +4,7 @@ import sys
 import os
 import ctypes as ct
 from .coppeliaConst import *
+import numpy as np
 
 #load library
 libsimx = None
@@ -278,11 +279,15 @@ def simxGetVisionSensorImage(clientID, sensorHandle, options, operationMode):
     reso = []
     image = []
     if (ret == 0):
-        image = [None]*resolution[0]*resolution[1]*bytesPerPixel
-        for i in range(resolution[0] * resolution[1] * bytesPerPixel):
-            image[i] = c_image[i]
+        # image = [None]*resolution[0]*resolution[1]*bytesPerPixel
+        # for i in range(resolution[0] * resolution[1] * bytesPerPixel):
+        #     image[i] = c_image[i]
         for i in range(2):
             reso.append(resolution[i])
+        array_type = ct.c_ubyte * bytesPerPixel * resolution[0] * resolution[1]
+        address = ct.addressof(c_image.contents)
+        image = np.ctypeslib.as_array(array_type.from_address(address))
+
     return ret, reso, image
 
 def simxSetVisionSensorImage(clientID, sensorHandle, image, options, operationMode):
