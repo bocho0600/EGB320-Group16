@@ -85,11 +85,11 @@ def main():
             while True:
                   imgRGB, imgHSV, RobotView = cam.getCurrentFrame()
                   frame_id = cam.getFrameID()
-
+                  CenterCoord = vision.draw_crosshair(RobotView)
                   # Find contours for the shelves
                   contoursShelf, ShelfMask = vision.findShelf(imgHSV)
                   # Get the detected shelf centers
-                  ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "Shelf", Draw=True)
+                  ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "S", Draw=True)
 
                   # If any shelves were detected
                   if ShelfCenters is not None:
@@ -101,8 +101,8 @@ def main():
                               ShelfAngle = vision.GetBearing(x_center, imgRGB)
                               
                               # Display the angle on the image
-                              cv2.putText(RobotView, f"Angle: {int(ShelfAngle)}", (int(x_center), int(y_center)), 
-                                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
+                              cv2.putText(RobotView, f"A: {int(ShelfAngle)}", (int(x_center), int(y_center)), 
+                                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 200), 1)
 
                   # Detect obstacles in the HSV image
                   contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)

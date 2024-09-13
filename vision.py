@@ -26,6 +26,27 @@ class VisionModule:
     def __init__(self):
         self.cap = None  # Initialize the camera object as an instance variable
         self.t1 = None
+    import cv2
+
+    def draw_crosshair(self, frame, color=(255, 255, 255), thickness=2):
+        # Get the dimensions of the frame
+        height, width = frame.shape[:2]
+        
+        # Calculate the center of the frame
+        center_x = width // 2
+        center_y = height // 2
+        FrameCenter = (center_x, center_y)
+        # Define the length of the crosshair arms
+        crosshair_length = 5
+        
+        # Draw the vertical line of the crosshair
+        cv2.line(frame, (center_x, center_y - crosshair_length), 
+                (center_x, center_y + crosshair_length), color, thickness)
+        
+        # Draw the horizontal line of the crosshair
+        cv2.line(frame, (center_x - crosshair_length, center_y), (center_x + crosshair_length, center_y), color, thickness)
+        return FrameCenter
+
 
     def CaptureImage(self):
         self.frame = self.cap.capture_array()  # Capture an image from the camera
@@ -159,7 +180,7 @@ class VisionModule:
             return 0, [], []  # Return zero shapes, and empty lists for distances and bearings
 
 
-                
+
         
     def GetContoursShelf(self, contours, output, colour, text, Draw=True, min_area=1000):
         detected_centers = []  # List to store the centers of detected shelves
@@ -241,7 +262,7 @@ class VisionModule:
             return detected_objects
         else:
             return None
-
+    #def ShowDetails(Type, Contours)
     def GetContoursObject(self, contours, output, colour, text, Draw=True):
         detected_objects = []  # List to store detected object info
         
@@ -323,5 +344,5 @@ class VisionModule:
     
     def GetBearing(self, x_center,image):
         offset_pixels = x_center - image.shape[1]/ 2
-        return (offset_pixels / image.shape[1]) * 80
+        return (offset_pixels / image.shape[1]) * 70
 
