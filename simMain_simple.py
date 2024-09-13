@@ -9,13 +9,14 @@ import cv2
 # MAIN SCRIPT
 if __name__ == '__main__':
 
-	Specific.start()
+	
 	
 	# Possibly override color ranges for simulator
 	if hasattr(Specific, 'color_ranges'):
 		VisionModule.color_ranges = Specific.color_ranges
 
 	try:
+		Specific.start()
 		NavigationModule.init(STATE.AISLE_DOWN)		
 		
 		while True:

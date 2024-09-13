@@ -22,6 +22,8 @@ class SimSpecific:
             'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
 		}
 
+    focal_length = 35 #cm
+
     # SET SCENE PARAMETERS
     sceneParameters = SceneParameters()
     sceneParameters.bayContents= np.random.random_integers(0,5,(6,4,3)) # Random item in each bay
@@ -43,8 +45,9 @@ class SimSpecific:
         img = cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 0)
         img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT), cv2.INTER_NEAREST)
         imgHSV = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        robotview = img #.copy()
 
-        return img, imgHSV
+        return img, imgHSV, robotview
 
     
     @classmethod

@@ -173,6 +173,102 @@ class VisionModule:
 	fps = 0
 
 
+	@classmethod
+	def DebugPipeline(cls, DebugDraw):
+		img, imgHSV, robotview = Specific.get_image()
+		#robotview = img
+		
+		DebugDraw = True
+		
+		contoursShelf, ShelfMask = VisionModule.findShelf(imgHSV)
+		ShelfCenter = VisionModule.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "She", Draw = DebugDraw)
+		if ShelfCenter != None:
+			ShelfAngle = VisionModule.GetBearing(ShelfCenter[1])
+			cv2.putText(robotview, f"Angle: {int(ShelfAngle)} cm", (int(ShelfCenter[0]), int(ShelfCenter[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
+		
+		# Detect obstacles in the HSV image
+		contoursObstacle, ObstacleMask = VisionModule.findObstacle(imgHSV)
+
+		# Get the list of detected obstacles' centers and dimensions
+		detected_obstacles = VisionModule.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obs", Draw=DebugDraw)
+
+		# Check if any obstacles were detected
+		if detected_obstacles is not None:
+		# Loop through each detected obstacle and process it
+			for obstacle in detected_obstacles:
+				x_ObstacleCenter, y_ObstacleCenter, ObHeight, ObWidth = obstacle
+				
+				# Calculate the obstacle's angle and distance
+				ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter)
+				ObstacleDistance = VisionModule.GetDistance(ObHeight, 150)
+
+				# Add the angle and distance information to the image
+				cv2.putText(robotview, f"A: {int(ObstacleAngle)} deg", (int(x_ObstacleCenter), int(y_ObstacleCenter + ObHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+				cv2.putText(robotview, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+
+		
+		# Assuming contoursMarkers is a list of contours found using cv2.findContours
+		contoursMarkers, MarkerMask = VisionModule.findMarkers(imgHSV)
+
+		# Get the list of detected markers' center and dimensions
+		detected_markers = VisionModule.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=DebugDraw)
+
+		if detected_markers is not None:
+			for marker in detected_markers:
+				x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
+				MarkerAngle = VisionModule.GetBearing(x_MarkerCenter)
+				MarkerDistance = VisionModule.GetDistance(MaHeight, 70)
+				cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+				cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
+				# You can now process each marker as needed
+		return robotview
+
+	@classmethod
+	def Pipeline(cls):
+		img, imgHSV, robotview = Specific.get_image()
+
+		
+		contoursShelf, ShelfMask = cls.findShelf(imgHSV)
+
+		# Detect obstacles in the HSV image
+		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV)
+
+		# Get the list of detected obstacles' centers and dimensions
+		detected_obstacles = cls.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obs", Draw=False)
+		
+		# Assuming contoursMarkers is a list of contours found using cv2.findContours
+		contoursMarkers, MarkerMask = cls.findMarkers(imgHSV)
+
+		# Get the list of detected markers' center and dimensions
+		detected_markers = cls.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=False)
+
+		aisle, marker_distance, marker_bearing, marker_x, marker_y = cls.ProcessAisleMarkers(detected_markers)
+
+		if aisle is not None and aisle != 0:
+			cv2.drawMarker(robotview, (int(marker_x), int(marker_y)), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
+			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(marker_x), int(marker_y)-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
+		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
+
+		# sort the remaining ones by their area
+		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
+		points = cls.combine_contour_points(contours, False)
+		points, projected_floor = cls.project_and_filter_contour(points)
+		dist_map = None
+		if points is not None and points.size > 0:
+			# draw
+			cv2.polylines(robotview, [points], False, (0, 0, 255), 1) # draw
+
+			dist_map = cls.get_dist_map(points, projected_floor)
+
+			cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+		
+		
+		
+		return robotview, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map
+
+		
+
 	# @classmethod
 	# def Capturing(cls):
 
@@ -219,7 +315,7 @@ class VisionModule:
 		contoursShelf, _ = cv2.findContours(ShelfMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 		
 		# Filter out small contours by area
-		filtered_contours = [cnt for cnt in contoursShelf if cv2.contourArea(cnt) > area_threshold]
+		#filtered_contours = [cnt for cnt in contoursShelf if cv2.contourArea(cnt) > area_threshold]
 		
 		return contoursShelf, ShelfMask
 
@@ -361,18 +457,29 @@ class VisionModule:
 			return None
 
 	@classmethod
-	def ProcessAisleMarkers(cls, shapeCount, distances, bearings, xs, ys):
-		# return aisle, distance, bearing
-		# detected_shapes if a list of tuples (ShapeContours, shape), shape in ["Square", "Circle"]
-		if shapeCount == 0:
+	def ProcessAisleMarkers(cls, detectedMarkers):
+
+		if detectedMarkers is None or len(detectedMarkers) < 1:
 			return 0, None, None, None, None
-				
-		distance = np.array(distances).mean()
+		
+		xs = []
+		ys = []
+		dists = []
+		bearings = []
+		for x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth in detectedMarkers:
+			xs.append(x_MarkerCenter)
+			ys.append(y_MarkerCenter)
+
+			bearings.append(VisionModule.GetBearing(x_MarkerCenter))
+			dists.append(VisionModule.GetDistance(MaHeight, 70))
+
+		distance = np.array(dists).mean()
 		bearing = np.array(bearings).mean()
 		x_center = np.array(xs).mean()
 		y_center = np.array(ys).mean()
 
-		return shapeCount, distance, bearing, x_center, y_center
+
+		return len(detectedMarkers), distance, bearing, x_center, y_center
   
 	@classmethod
 	def GetDistance(cls, width, real_width):
@@ -381,5 +488,5 @@ class VisionModule:
 	@classmethod
 	def GetBearing(cls, x_center):
 		offset_pixels = x_center - SCREEN_WIDTH/ 2
-		return (offset_pixels / SCREEN_WIDTH) * 22.3
+		return offset_pixels * FOV_HORIZONTAL / SCREEN_WIDTH
 

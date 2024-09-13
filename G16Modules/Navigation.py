@@ -54,38 +54,55 @@ class NavigationModule:
 	
 
 	@classmethod
-	def init(cls, initial_state):
-		cls.t_now = time.time()
+	def init(cls, initial_state,instruction):
+		
+		cls.target_aisle = int(instruction[0])
+		cls.target_bay = int(instruction[1])
+		cls.target_side = instruction[2]
+		cls.target_height = int(instruction[3])
+		cls.target_object = instruction[4]
 
+
+		shelf_length = 112 #cm
+		bay_width = shelf_length / 4
+		cls.target_bay_distance = shelf_length - bay_width/2 - cls.target_bay*bay_width
+		print(f"We want to be {cls.target_bay_distance} cm from aisle marker {cls.target_aisle}")
+
+		cls.state_callbacks[STATE.LOST] = (cls.lost_start, cls.lost_update)
 		cls.state_callbacks[STATE.WANDER] = (cls.wander_start, cls.wander_update)
 		cls.state_callbacks[STATE.AISLE_DOWN] = (cls.aisle_down_start, cls.aisle_down_update)
 		cls.state_callbacks[STATE.FACE_BAY] = (cls.face_bay_start, cls.face_bay_update)
 		cls.state_callbacks[STATE.COLLECT_ITEM] = (cls.collect_item_start, cls.collect_item_update)
 
 		cls.current_state = initial_state
+		cls.t_now = time.time()
 		cls.call_current_start()
 	
+	
+
 	# Call the start function for the current state
 	@classmethod
 	def call_current_start(cls):
+		print(f"State is now {cls.current_state.name}")
 		return cls.state_callbacks[cls.current_state][0]()
 	
 	# Call the update function for the current state
 	@classmethod
-	def call_current_update(cls, delta):
-		return cls.state_callbacks[cls.current_state][1](delta)
+	def call_current_update(cls, delta,*args):
+		return cls.state_callbacks[cls.current_state][1](delta,*args)
 
 	# Call current update function then update the current state
 	@classmethod
-	def update(cls):
+	def update(cls,*args):
 		t_last = cls.t_now
 		cls.t_now = time.time()
 		delta = cls.t_now - t_last
 
-		new_state = cls.call_current_update(delta)
+		new_state, debug_img = cls.call_current_update(delta,*args)
 		if new_state != cls.current_state:
 			cls.current_state = new_state
 			cls.call_current_start()
+		return debug_img
 	#endregion
 
 	#region Utility Functions
@@ -225,34 +242,25 @@ class NavigationModule:
 	
 	#region State Callbacks
 	@classmethod
+	def lost_start(cls):
+		print("Lost!")
+
+	@classmethod
+	def lost_update(cls,delta, debug_img, *args):
+		return STATE.WANDER, debug_img
+
+	@classmethod
 	def wander_start(cls):
 		cls.forced_avoidance_start()
 		
 
 	@classmethod
-	def wander_update(cls, delta):
+	def wander_update(cls, delta, debug_img, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map):
 
+		if marker_distance is not None:
+			return STATE.AISLE_DOWN, debug_img
 
-		img, img_HSV = Specific.get_image()
-		debug_img = img.copy()
-
-
-		# exclude small areas and consider in order of size
-		contour, mask = VisionModule.findFloor(img_HSV)
-
-		# Are must be greater then 200. Then, sort the remaining ones by their area
-		contour = [cont for cont in contour if cv2.contourArea(cont) > 200]
-		contour = sorted(contour, key=lambda cont: -cv2.contourArea(cont))
-
-		floor_contour = cls.combine_contour_points(contour)
-		floor_contour, projected_floor = cls.project_and_filter_contour(floor_contour)
-
-
-		if floor_contour is not None and floor_contour.size > 0:
-			# draw
-			debug_img = cv2.polylines(debug_img, [floor_contour], False, (0, 0, 255), 1) # draw
-
-			dist_map = cls.get_dist_map(floor_contour, projected_floor)
+		if points is not None and points.size > 0:
 
 			dist_map = cls.forced_avoidance(dist_map)
 			if cls.avoid_left > 0:
@@ -262,7 +270,6 @@ class NavigationModule:
 
 			safety_map = cls.expand_safety(dist_map)
 			
-			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
 
 
@@ -290,16 +297,13 @@ class NavigationModule:
 			cls.forced_avoidance(None)
 			rotational_vel = pi/2
 			forward_vel = 0
-			
 
-		cv2.imshow("res", debug_img)
-		cv2.waitKey(1)
 
 
 		cls.forced_avoidance_timer_update(forward_vel/5, delta*8)
 		cls.set_velocity(forward_vel/5,rotational_vel/5)
 
-		return STATE.WANDER
+		return STATE.WANDER, debug_img
 	
 	
 	@classmethod
@@ -308,44 +312,14 @@ class NavigationModule:
 		
 
 	@classmethod
-	def aisle_down_update(cls, delta):
-		img, img_HSV = VisionModule.Capturing()
-		debug_img = img
-
-
-		# exclude small areas and consider in order of size
-		shelf_contour, shelf_mask = VisionModule.findShelf(img_HSV, 250, cv2.CHAIN_APPROX_NONE)
-		obstacle_contour, obstacle_mask = VisionModule.findObstacle(img_HSV, cv2.CHAIN_APPROX_NONE)
-
-		cv2.drawContours(debug_img, shelf_contour, -1, (0,255,255), 2)
-		cv2.drawContours(debug_img, obstacle_contour, -1, (0,255,0), 2)
-
-		contours = [c for c in shelf_contour] + [c for c in obstacle_contour]
-
-		# sort the remaining ones by their area
-		contours = [cont for cont in contours if cv2.contourArea(cont) > 200]
-		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
-
-		points = VisionModule.combine_contour_points(contours, False)
-		points, projected_floor = VisionModule.project_and_filter_contour(points)
-
-		black_mask = VisionModule.findBlack(img_HSV)
-		marker_contours, _ = cv2.findContours(black_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-		shapeCount, distances, bearings, xs, ys = VisionModule.MarkerShapeDetection(marker_contours, None, False)
-		aisle, aisle_distance, aisle_bearing, marker_x, marker_y = VisionModule.ProcessAisleMarkers(shapeCount, distances, bearings, xs, ys)
-
-		if aisle is not None and aisle != 0:
-			cv2.drawMarker(debug_img, (int(marker_x), int(marker_y)), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
-
-		#print(aisle, aisle_distance, aisle_bearing)
-
-
+	def aisle_down_update(cls, delta, debug_img, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map):
+		if marker_distance is None:
+			return STATE.LOST, debug_img
+		
+		if marker_distance < cls.target_bay_distance:
+			return STATE.FACE_BAY, debug_img
 
 		if points is not None and points.size > 0:
-			# draw
-			debug_img = cv2.polylines(debug_img, [points], False, (0, 0, 255), 1) # draw
-
-			dist_map = VisionModule.get_dist_map(points, projected_floor)
 
 			dist_map = cls.forced_avoidance(dist_map)
 			if cls.avoid_left > 0:
@@ -354,41 +328,59 @@ class NavigationModule:
 				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
 
 			safety_map = cls.expand_safety(dist_map)
+			# repulsive_map = (safety_map < 0.3)*1
+
+			attractive_map = np.zeros(safety_map.size)
+			for i in range(safety_map.size):
+				bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
+				attractive_map[i] = 1.0 - abs(bearing - marker_bearing)
 			
-			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
-			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+			potential_map = attractive_map * safety_map
 
-			goal_error = (safety_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
+			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+			debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+			
+
+			goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
 			rotational_vel = goal_error*cls.Kp
-			forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+			forward_vel = cls.MAX_ROBOT_VEL * (1.0 - 4.0 * cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
-			debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 			
 			cls.forced_avoidance_timer_update(forward_vel/5, delta)
 			cls.set_velocity(forward_vel/5,rotational_vel/5)
 		else:
-			cls.set_velocity(0,0)
-			pass
+			return STATE.LOST, debug_img
+		
 
-		VisionModule.ExportImage("Debug", debug_img, True)
-
-
-		return STATE.AISLE_DOWN
+		return STATE.AISLE_DOWN, debug_img
 	
 	@classmethod
 	def face_bay_start(cls):
-		pass
+		cls.turn_to_bay_remaining = pi/2
+		cls.set_velocity(0,0)
 	
 	@classmethod
-	def face_bay_update(cls):
-		return STATE.FACE_BAY
+	def face_bay_update(cls, delta, debug_img, *args):
+		
+		rot = 0.35
+		
+		cls.turn_to_bay_remaining -= rot*delta
+		if cls.turn_to_bay_remaining <= 0:
+			return STATE.COLLECT_ITEM, debug_img
+
+		if cls.target_side == "Left":
+			rot = -rot
+		cls.set_velocity(0, rot)
+
+		return STATE.FACE_BAY, debug_img
+
 
 	@classmethod
 	def collect_item_start(cls):
-		pass
+		cls.set_velocity(0,0)
 	
 	@classmethod
-	def collect_item_update(cls):
-		return STATE.COLLECT_ITEM
+	def collect_item_update(cls, delta, debug_img, *args):
+		return STATE.COLLECT_ITEM, debug_img
 	
 	#endregion
