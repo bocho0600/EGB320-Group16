@@ -104,67 +104,22 @@ def main():
                   contoursShelf, ShelfMask = vision.findShelf(imgHSV)
                   # Get the detected shelf centers
                   ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "S", Draw=True)
+                  ShelfCenter, ShelfBearing = vision.GetInfoShelf(RobotView, ShelfCenters, imgRGB)
 
-                  # If any shelves were detected
-                  if ShelfCenters is not None:
-                  # Loop through each detected shelf center
-                        for ShelfCenter in ShelfCenters:
-                              x_center, y_center = ShelfCenter
-                              
-                              # Calculate the bearing (angle) for each shelf
-                              ShelfAngle = vision.GetBearing(x_center, imgRGB)
-                              
-                              # Display the angle on the image
-                              cv2.putText(RobotView, f"A: {int(ShelfAngle)}", (int(x_center), int(y_center)), 
-                                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 200), 1)
 
                   # Detect obstacles in the HSV image
                   contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
-
                   # Get the list of detected obstacles' centers and dimensions
                   detected_obstacles = vision.GetContoursObject(contoursObstacle, RobotView, (0, 255, 255), "Obs", Draw=True)
+                  ObsCenters, ObsDistance, ObsBearing = vision.GetInfoObject(RobotView, detected_obstacles, imgRGB)
 
-                  # Check if any obstacles were detected
-                  if detected_obstacles is not None:
-                  # Loop through each detected obstacle and process it
-                        for obstacle in detected_obstacles:
-                              x_ObstacleCenter, y_ObstacleCenter, ObHeight, ObWidth = obstacle
-                              
-                              # Calculate the obstacle's angle and distance
-                              ObstacleAngle = vision.GetBearing(x_ObstacleCenter, imgRGB)
-                              ObstacleDistance = vision.GetDistance(ObHeight, 150)
 
-                              # Add the angle and distance information to the image
-                              cv2.putText(RobotView, f"A: {int(ObstacleAngle)} deg", (int(x_ObstacleCenter), int(y_ObstacleCenter + ObHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-                              cv2.putText(RobotView, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
-
-                  
-                  # Assuming contoursMarker is obtained from some previous processing step
                   
                   WallRGB,  WallImgGray, WallMask = vision.findWall(imgHSV,imgRGB)
                   ContoursMarkers, mask1 = vision.findMarkers(WallImgGray, WallMask)
-                  for contours in ContoursMarkers:
-                        if cv2.contourArea(contours) > 100:
-                              (x, y), radius = cv2.minEnclosingCircle(contours)
-                              center = (int(x), int(y))
-                              circle_area = np.pi * (radius ** 2)
-                              contour_area = cv2.contourArea(contours)
-                              # Define the acceptable difference threshold
-                              area_difference_threshold = 5000  # You can adjust this value
+                  avg_center, avg_distance, avg_center, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
 
-                              # Check if the difference between areas is within the threshold
-                              if abs(contour_area - circle_area) <= area_difference_threshold:
-                                    MarkerAngle = vision.GetBearing(x, imgRGB)
-                                    MarkerDistance = vision.GetDistance(radius * 2, 70)
-                                    cv2.putText(RobotView, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-                                    cv2.putText(RobotView, f"D: {int(MarkerDistance)} cm", (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
-                                    cv2.circle(RobotView, center, int(radius), (255, 255), 2)
-                                    cv2.drawMarker(RobotView, center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
-                                    cv2.putText(RobotView, f"M", (int(x - 5), int(y + radius/2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-                        
 
-                  
-                  #cam.DisplayFrame(frame_id, FPS=True, frame=RobotView, frame1 = WallImgGray, frame2 = WallMask, frame3 = markers, frame4 = mask1)
                   cam.DisplayFrame(frame_id, FPS=True, frame=RobotView)
                   # Break the loop if 'q' is pressed
                   if cv2.waitKey(1) & 0xFF == ord('q'):

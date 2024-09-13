@@ -9,7 +9,7 @@ import time
 
 class VisionModule:
     color_ranges = {
-        'wall': (np.array([29, 5, 112]), np.array([46, 54, 241])),
+        'wall': (np.array([22, 31, 115]), np.array([39, 62, 255])),
         'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
         'yellow': (np.array([29, 177, 244]), np.array([30, 251, 255])),
         'blue': (np.array([81, 0, 0]), np.array([116, 255, 255])),
@@ -274,9 +274,102 @@ class VisionModule:
             return detected_centers
         else:
             return None
+    def GetInfoShelf(self, robotview, ShelfCenters, imgRGB):
+        bearing = []
+        center = []
+        if ShelfCenters is not None:
+# Loop through each detected shelf center
+            for ShelfCenter in ShelfCenters:
+                    x_center, y_center = ShelfCenter
+                    cen = (x_center, y_center)
+                    # Calculate the bearing (angle) for each shelf
+                    ShelfAngle = self.GetBearing(x_center, imgRGB)
+                    bearing.append(ShelfAngle)
+                    center.append(cen)
+                    # Display the angle on the image
+                    cv2.putText(robotview, f"A: {int(ShelfAngle)}", (int(x_center), int(y_center)), 
+                                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 200), 1)
+        return center, bearing
+    
+    
+    def GetInfoObject(self, robotview, detected_obstacles, imgRGB):
+        distance = []
+        bearing = []
+        centers = []
+        if detected_obstacles is not None:
+# Loop through each detected obstacle and process it
+            for obstacle in detected_obstacles:
+                    x_ObstacleCenter, y_ObstacleCenter, ObHeight, ObWidth = obstacle
+                    # Calculate the obstacle's angle and distance
+                    ObstacleAngle = self.GetBearing(x_ObstacleCenter, imgRGB)
+                    ObstacleDistance = self.GetDistance(ObHeight, 150)
+                    distance.append(ObstacleDistance)
+                    bearing.append(ObstacleAngle)
+                    centers.append((x_ObstacleCenter, y_ObstacleCenter))
+                    # Add the angle and distance information to the image
+                    cv2.putText(robotview, f"A: {int(ObstacleAngle)} deg", (int(x_ObstacleCenter), int(y_ObstacleCenter + ObHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+                    cv2.putText(robotview, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+        return centers, distance, bearing
+    
+    def GetInfoMarkers(self, robotview, ContoursMarkers, imgRGB):
+        distance = []
+        bearing = []
+        centers = []
+
+        for contours in ContoursMarkers:
+            if cv2.contourArea(contours) > 100:
+                (x, y), radius = cv2.minEnclosingCircle(contours)
+                center = (int(x), int(y))
+                circle_area = np.pi * (radius ** 2)
+                contour_area = cv2.contourArea(contours)
+                
+                # Define the acceptable difference threshold
+                area_difference_threshold = 5000  # You can adjust this value
+
+                # Check if the difference between areas is within the threshold
+                if abs(contour_area - circle_area) <= area_difference_threshold:
+                    MarkerAngle = self.GetBearing(x, imgRGB)
+                    MarkerDistance = self.GetDistance(radius * 2, 70)
+                    # cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), 
+                    #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+                    # cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x), int(y)), 
+                    #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+                    cv2.circle(robotview, center, int(radius), (255, 255), 2)
+                    cv2.drawMarker(robotview, center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
+                    cv2.putText(robotview, f"M", (int(x - 6), int(y + radius / 2)), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
+                    
+                    # Store the distance, bearing, and center
+                    distance.append(MarkerDistance)
+                    bearing.append(MarkerAngle)
+                    centers.append(center)
+
+        # Calculate the average center if there are any centers
+        if centers:
+            avg_x = sum([c[0] for c in centers]) / len(centers)
+            avg_y = sum([c[1] for c in centers]) / len(centers)
+            avg_center = (int(avg_x), int(avg_y))
+            avg_distance = sum(distance) / len(distance)
+            avg_bearing = sum(bearing) / len(bearing)
+            shape_count = len(centers)
+            cv2.drawMarker(robotview, avg_center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
+            cv2.putText(robotview, f"A: {int(avg_bearing)} deg", (int(avg_x), int(avg_y + 20)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+            cv2.putText(robotview, f"D: {int(avg_distance)} cm", (int(avg_x), int(avg_y)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+            cv2.putText(robotview, f"{shape_count}", (int(avg_x - 10), int(avg_y)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        else:
+            avg_center = None  # If no centers were found, return None or a default value
+            avg_bearing = None
+            avg_distance = None
+            shape_count = 0
+
+        return avg_center, avg_distance, avg_center, shape_count
 
 
-        
+   
+    
     def GetContoursObject(self, contours, output, colour, text, Draw=True):
         detected_objects = []  # List to store detected object info
         
@@ -299,53 +392,9 @@ class VisionModule:
             return detected_objects
         else:
             return None
-    #def ShowDetails(Type, Contours)
-    def GetContoursObject(self, contours, output, colour, text, Draw=True):
-        detected_objects = []  # List to store detected object info
-        
-        for contour in contours:
-            if cv2.contourArea(contour) > 50:
-                x, y, width, height = cv2.boundingRect(contour)
-                
-                if Draw:
-                    cv2.rectangle(output, (x, y), (x + width, y + height), colour, 1)
-                    cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                
-                # Calculate center
-                x_center, y_center = x + width // 2, y + height // 2
-                
-                # Append this object's properties to the list
-                detected_objects.append((x_center, y_center, height, width))
-        
-        # Return list of detected objects
-        if detected_objects:
-            return detected_objects
-        else:
-            return None
 
 
-    def GetContoursObject(self, contours, output, colour, text, Draw=True):
-        detected_objects = []  # List to store detected object info
-        
-        for contour in contours:
-            if cv2.contourArea(contour) > 50:
-                x, y, width, height = cv2.boundingRect(contour)
-                
-                if Draw:
-                    cv2.rectangle(output, (x, y), (x + width, y + height), colour, 1)
-                    cv2.putText(output, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                
-                # Calculate center
-                x_center, y_center = x + width // 2, y + height // 2
-                
-                # Append this object's properties to the list
-                detected_objects.append((x_center, y_center, height, width))
-        
-        # Return list of detected objects
-        if detected_objects:
-            return detected_objects
-        else:
-            return None
+
 
     def GetContoursMarker(self, contours, output, colour, text, Draw=True):
         detected_objects = []  # List to store detected object info
