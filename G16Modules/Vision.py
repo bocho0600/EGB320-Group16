@@ -10,6 +10,12 @@ from .Globals import *
 # StudentID: n11429984
 # Email: minhnguyen.le@qut.edu.au
 
+class VisionOutput:
+	# Basically a class where we can put whatever data we want
+	def __init__(self, **kwargs):
+		for key, value in kwargs.items():
+			self.__setattr__(key, value)
+
 class VisionModule:
 	color_ranges = {
 		'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
@@ -118,25 +124,27 @@ class VisionModule:
 			if npc.shape[0] < 3:
 				continue
 
-				
-
-			
 			# # append to comvined_contour
 			if combined_contour is None:
 				combined_contour = npc
 			else:
 				combined_contour = np.r_[combined_contour, npc]
-		
+
 		if combined_contour is not None:
 			combined_contour = combined_contour[np.argsort(combined_contour[:,0])]
-		
-			# add a 0 point before and after so that the dist map counts blank spaces correctly
+		return combined_contour
+
+	@classmethod
+	def handle_outer_contour(cls, combined_contour):
+		if combined_contour is not None:
+			# add a 0 point before and after so that the dist map counts blank spaces as close walls and will turn away from it and towards a shelf.
+			# This will cause problems when trying to leave an aisle so don't call it in that case.
 			if combined_contour[0,0] > 1: # any with 0 were removed so first being =1 is acceptable
 				combined_contour = np.r_[[[combined_contour[0,0]-1, SCREEN_HEIGHT-1, 0]], combined_contour]
 			if combined_contour[-1,0] < SCREEN_WIDTH-2:# any with SCREEN_WIDTH-1 were removed so first being =SCREEN_WIDTH-2 is acceptable
 				combined_contour = np.r_[combined_contour, [[combined_contour[-1,0]+1, SCREEN_HEIGHT-1, 0]]]
-
 		return combined_contour
+
 
 	@classmethod
 	def project_and_filter_contour(cls,contour_points):
@@ -250,6 +258,10 @@ class VisionModule:
 		
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 
+		# Get the list of detected shelves' centers and dimensions
+		detected_shelves = cls.GetContoursObject(contoursShelf, robotview, (0, 255, 255), "She", Draw=False)
+
+
 		# Detect obstacles in the HSV image
 		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
 
@@ -272,21 +284,10 @@ class VisionModule:
 
 		# sort the remaining ones by their area
 		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
-		points = cls.combine_contour_points(contours, False)
-		points, projected_floor = cls.project_and_filter_contour(points)
-		dist_map = None
-		real_mappoints = None
-		if points is not None and points.size > 0:
-			# draw
-			cv2.polylines(robotview, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
-
-			dist_map = cls.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
-
-			cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
 		
 		
-		return robotview, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map
+		return robotview, VisionOutput(aisle=aisle, marker_distance=marker_distance, marker_bearing=marker_bearing, contours=contours, detected_shelves=detected_shelves)
 
 		
 
@@ -494,7 +495,7 @@ class VisionModule:
 			bearings.append(VisionModule.GetBearing(x_MarkerCenter))
 			dists.append(VisionModule.GetDistance(MaHeight, 70))
 
-		distance = np.array(dists).mean()
+		distance = np.median(np.array(dists)) # incase the height and therefore distance of the third marker is cut off
 		bearing = np.array(bearings).mean()
 		x_center = np.array(xs).mean()
 		y_center = np.array(ys).mean()

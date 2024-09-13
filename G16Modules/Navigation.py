@@ -9,6 +9,7 @@ from .Vision import VisionModule
 STATE = Enum('STATE', [
 	'LOST',
 	'WANDER',
+	'FIND_AISLE_FROM_OUTSIDE',
 	'AISLE_DOWN',
 	'FACE_BAY',
 	'COLLECT_ITEM',
@@ -35,7 +36,7 @@ class NavigationModule:
 
 	
 	MAX_ROBOT_VEL = 0.2 # m/s
-	ROTATIONAL_BIAS = 0.9 #tweak this parameter to be more or less aggressive with turns vs straight
+	ROTATIONAL_BIAS = 0.8 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
 	MAX_ROBOT_ROT = pi/3 * Kp # rad/s
 	RADIUS = 0.15 # how far to stay away from wall
@@ -61,7 +62,7 @@ class NavigationModule:
 		cls.target_side = instruction[2]
 		cls.target_height = int(instruction[3])
 		cls.target_object = instruction[4]
-
+		print(f"Aisle: {cls.target_aisle}, Bay: {cls.target_bay}, Side: {cls.target_side}")
 
 		shelf_length = 112 #cm
 		bay_width = shelf_length / 4
@@ -70,6 +71,7 @@ class NavigationModule:
 
 		cls.state_callbacks[STATE.LOST] = (cls.lost_start, cls.lost_update)
 		cls.state_callbacks[STATE.WANDER] = (cls.wander_start, cls.wander_update)
+		cls.state_callbacks[STATE.FIND_AISLE_FROM_OUTSIDE] = (cls.fafo_start, cls.fafo_update)
 		cls.state_callbacks[STATE.AISLE_DOWN] = (cls.aisle_down_start, cls.aisle_down_update)
 		cls.state_callbacks[STATE.FACE_BAY] = (cls.face_bay_start, cls.face_bay_update)
 		cls.state_callbacks[STATE.COLLECT_ITEM] = (cls.collect_item_start, cls.collect_item_update)
@@ -258,9 +260,23 @@ class NavigationModule:
 		
 
 	@classmethod
-	def wander_update(cls, delta, debug_img, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map):
+	def wander_update(cls, delta, debug_img, visout):
 
-		if marker_distance is not None and abs(marker_bearing) < 0.8:
+		points = VisionModule.combine_contour_points(visout.contours, False)
+		points = VisionModule.handle_outer_contour(points)
+		points, projected_floor = VisionModule.project_and_filter_contour(points)
+		
+		dist_map = None
+		if points is not None and points.size > 0:
+			# draw
+			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
+
+			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
+
+			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+		
+
+		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8:
 			return STATE.AISLE_DOWN, debug_img
 
 		if points is not None and points.size > 0:
@@ -279,7 +295,7 @@ class NavigationModule:
 			if abs(safety_map.max() - safety_map.min()) < 0.01:
 				# no safe path- turn and dont move forward
 				
-				goal_error = (dist_map[:,0].argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
+				goal_error = (dist_map[:,0].argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
 				rotational_vel = goal_error*cls.Kp
 
 				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
@@ -287,13 +303,19 @@ class NavigationModule:
 
 				debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
+				if cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
+					return cls.next_state, debug_img
 			else:
 				# move into the longest safe path
-				goal_error = (safety_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
+				goal_error = (safety_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
 				rotational_vel = goal_error*cls.Kp
 				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
 				debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+
+				if cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
+					return cls.next_state, debug_img
+				
 			
 			
 		else:
@@ -308,19 +330,76 @@ class NavigationModule:
 
 		return STATE.WANDER, debug_img
 	
-	
+	@classmethod
+	def fafo_start(cls):
+		pass
+
+	@classmethod
+	def fafo_update(cls, delta, debug_img, visout):
+		# Aisle 1: rotate right until we cant see shelf then change to wander to continue rotating right until we see a shelf
+		# Aisle 2: rotate right until we cant see shelf then change to wander to continue rotating right until we see a shelf and move forward until we are 1m away then switch back to fafo
+		# Aisle 3: rotate until we see a marker
+
+		if visout.aisle is not None and visout.aisle == cls.target_aisle:
+			return STATE.AISLE_DOWN, debug_img
+
+
+		if cls.target_aisle == 1:
+			if visout.detected_shelves is not None:
+				cls.set_velocity(0, 0.4)
+			else:
+				return STATE.WANDER, debug_img
+		elif cls.target_aisle == 2:
+			if visout.detected_shelves is not None:
+				cls.set_velocity(0, 0.4)
+			else:
+				cls.wander_until_distance = 1.3 # "metres" it is fairly off, should be about 1.1
+				cls.next_state = STATE.FIND_AISLE_FROM_OUTSIDE
+				return STATE.WANDER, debug_img
+				
+		elif cls.target_aisle == 3:
+			if visout.aisle is None or visout.aisle < 1:
+				cls.set_velocity(0, 0.4)
+			else:
+				return STATE.AISLE_DOWN, debug_img
+		else:
+			print("Target Aisle out of bounds")
+
+		return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
+
 	@classmethod
 	def aisle_down_start(cls):
 		pass
 		
 
 	@classmethod
-	def aisle_down_update(cls, delta, debug_img, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map):
-		if marker_distance is None:
+	def aisle_down_update(cls, delta, debug_img, visout):
+
+
+		if visout.marker_distance is None:
 			return STATE.LOST, debug_img
 		
-		if marker_distance < cls.target_bay_distance:
+		if visout.marker_distance < cls.target_bay_distance:
 			return STATE.FACE_BAY, debug_img
+
+		if visout.aisle > cls.target_aisle:
+			# Go back to fafo if we can see MORE markers than we should.
+			# If we can see less markers the markers could be occluded
+			return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
+		
+
+		points = VisionModule.combine_contour_points(visout.contours, False)
+		points = VisionModule.handle_outer_contour(points)
+		points, projected_floor = VisionModule.project_and_filter_contour(points)
+		dist_map = None
+		if points is not None and points.size > 0:
+			# draw
+			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
+
+			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
+
+			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+		
 
 		if points is not None and points.size > 0:
 
@@ -336,11 +415,12 @@ class NavigationModule:
 			attractive_map = np.zeros(safety_map.size)
 			for i in range(safety_map.size):
 				bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
-				attractive_map[i] = 1.0 - 0.2 * abs(bearing - marker_bearing)
+				attractive_map[i] = 1.0 - 0.6 * abs(bearing - visout.marker_bearing)
 			
 			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
 
 			if abs(safety_map.min() - safety_map.max()) < 0.01:
+				cls.forced_avoidance_start() #reset FA
 				forward_vel = -cls.MAX_ROBOT_VEL/2
 				rotational_vel = 0
 			else:
@@ -350,7 +430,7 @@ class NavigationModule:
 				debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 				
 
-				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
+				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
 				rotational_vel = goal_error*cls.Kp
 				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - 4.0 * cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
@@ -369,7 +449,7 @@ class NavigationModule:
 		cls.set_velocity(0,0)
 	
 	@classmethod
-	def face_bay_update(cls, delta, debug_img, *args):
+	def face_bay_update(cls, delta, debug_img, visout):
 		
 		rot = 0.35
 		
@@ -389,7 +469,7 @@ class NavigationModule:
 		cls.set_velocity(0,0)
 	
 	@classmethod
-	def collect_item_update(cls, delta, debug_img, *args):
+	def collect_item_update(cls, delta, debug_img, visout):
 		return STATE.COLLECT_ITEM, debug_img
 	
 	#endregion

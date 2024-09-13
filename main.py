@@ -21,13 +21,15 @@ def main(): # Main function
 	try:
 		
 		Specific.start()
-		NavigationModule.init(STATE.WANDER, instruction[2]) # instruction 2 is aisle 2 bay 2
+		instruction = instructions[2]
+		
+		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction) # instruction 2 is aisle 2 bay 2
 
 		while True:
 			
-			robotview, *args = VisionModule.Pipeline()
+			robotview, visout = VisionModule.Pipeline()
 			# print(marker_distance, marker_bearing)
-			robotview = NavigationModule.update(robotview, *args)
+			robotview = NavigationModule.update(robotview, visout)
 
 			VisionModule.ExportImage("RobotView", robotview, FPS = True)
 			Specific.update()
@@ -41,6 +43,6 @@ def main(): # Main function
 if __name__ == "__main__": # Run the main function
 	CSV = csvread.CSVReader('Order_1.csv')
 	CSV.read_csv()
-	instruction = CSV.RobotInstruction() # Generating robot instructions and print instructions
+	instructions = CSV.RobotInstruction() # Generating robot instructions and print instructions
 
 	main()

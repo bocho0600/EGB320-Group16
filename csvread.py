@@ -18,8 +18,8 @@ class CSVReader:
     def read_csv(self):
         with open(self.file_name, mode="r", encoding='utf-8-sig') as csv_file:
             self.item_info = list(csv.reader(csv_file))
-            for row in self.item_info:
-                print(row)  # This line can be removed if you don't need to print each row
+            # for row in self.item_info:
+            #     print(row)  # This line can be removed if you don't need to print each row
         return self.item_info
     
     def RobotInstruction(self):
@@ -37,11 +37,11 @@ class CSVReader:
                 continue  # Skip rows that do not match any of the conditions
 
             # Append the transformed row to robot_instruction
-            self.robot_instruction.append([aisle, row[1], side, row[3], row[4]])
+            self.robot_instruction.append([aisle, row[2], side, row[3], row[4]])
 
-        print("Robot Instructions:")
-        for instruction in self.robot_instruction:
-            print(instruction)
+        # print("Robot Instructions:")
+        # for instruction in self.robot_instruction:
+        #     print(instruction)
         
         return self.robot_instruction
 
