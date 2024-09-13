@@ -1,8 +1,8 @@
-
 from __future__ import print_function
 import sys
 import os
 
+# Locate file with DFRobot functions
 DFRobot_module_directory = "/home/group16/units/egb320/EGB320-Group16"
 sys.path.append(DFRobot_module_directory)
 
@@ -29,17 +29,7 @@ def print_board_status():
   elif board.last_operate_status == board.STA_ERR_SOFT_VERSION:
     print("board status: unsupport board framware version")
 
-
-if __name__ == "__main__":
-
-  board_detect()    # If you forget address you had set, use this to detected them, must have class instance
-
-  while board.begin() != board.STA_OK:    # Board begin and check board status
-    print_board_status()
-    print("board begin faild")
-    time.sleep(2)
-  print("board begin success")
-
+# Set constants
 board.set_encoder_enable(board.ALL)                 # Set selected DC motor encoder enable
   #board.set_encoder_disable(board.ALL)              # Set selected DC motor encoder disable
 board.set_encoder_reduction_ratio(board.ALL, 150)   # Set selected DC motor encoder reduction ratio, given on website motor reduction ratio is 100
@@ -54,7 +44,6 @@ board.set_moter_pwm_frequency(1000)                 # Set DC motor pwm frequency
       @param orientation    Motor orientation, self.CW (clockwise) or self.CCW (counterclockwise)
       @param speed         Motor pwm duty cycle, in range 0 to 100, otherwise no effective
     '''
-
 
 
 def Forwards(speed): 
@@ -92,17 +81,8 @@ def Turn360(speed):
   print("Finished 360")
   
 def Stop(): 
-  board.motor_stop(board.ALL)                       # stop all DC motor
+  board.motor_stop(board.ALL)# stop all DC motor
   print("Motors stopped")
-
-    
-# except KeyboardInterrupt:
-#       # Handle keyboard interrupt to stop the robot
-#       print('Keyboard interrupt received. Stopping the robot...')
-#       board.motor_stop(board.ALL)
-#       sys.exit(0)
-
-
 
 def Move(linear_velocity, angular_velocity):
     '''
@@ -120,18 +100,18 @@ def Move(linear_velocity, angular_velocity):
     right_motor_speed = max(min(right_motor_speed, max_speed), -max_speed)
     print("The left motor speed is ",left_motor_speed )
     print("The right motor speed is ",right_motor_speed )
-    # Determine the movement direction based on speed values
+    # Determine the movement direction based on speed values//7
     if left_motor_speed > 0:
         board.motor_movement([board.M1], board.CW, abs(left_motor_speed))
     elif left_motor_speed < 0:
-        board.motor_movement([board.M1], board.CW, abs(left_motor_speed))
+        board.motor_movement([board.M1], board.CCW, abs(left_motor_speed))
     else:
         board.motor_stop([board.M1])
     
     if right_motor_speed > 0:
         board.motor_movement([board.M2], board.CCW, abs(right_motor_speed))
     elif right_motor_speed < 0:
-        board.motor_movement([board.M2], board.CCW, abs(right_motor_speed))
+        board.motor_movement([board.M2], board.CW, abs(right_motor_speed))
     else:
         board.motor_stop([board.M2])
     
@@ -143,8 +123,10 @@ def Move(linear_velocity, angular_velocity):
 
 #(100, 0)  # Move forward with a slight right turn
 #speed = 100
-#Move(10, 0)  # Move forward with a slight right turn
-Turn360(55)
-time.sleep(5)
+time.sleep(1)
+Move(50, 0)  # Move forward with a slight right turn
+#Move(-80,0)
+#Backwards(60)
+time.sleep(30)
 Stop()
 
