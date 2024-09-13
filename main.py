@@ -25,9 +25,9 @@ def main(): # Main function
 
 		while True:
 			
-			robotview, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map = VisionModule.Pipeline()
+			robotview, *args = VisionModule.Pipeline()
 			# print(marker_distance, marker_bearing)
-			robotview = NavigationModule.update(robotview, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map)
+			robotview = NavigationModule.update(robotview, *args)
 
 			VisionModule.ExportImage("RobotView", robotview, FPS = True)
 			Specific.update()

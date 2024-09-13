@@ -14,7 +14,7 @@ class SimSpecific:
     color_ranges = {
             'floor': (np.array([0, 0, 80]), np.array([0, 0, 135])),
             'wall': (np.array([0, 0, 146]), np.array([30, 1, 255])),
-            'blue': (np.array([3, 171, 54]), np.array([3, 175, 112])),
+            'blue': (np.array([1, 165, 50]), np.array([10, 200, 120])),
             'black': (np.array([0, 0, 0]), np.array([0, 0, 0])),
             'yellow': (np.array([99, 216, 130]), np.array([99, 217, 187])),
             'green': (np.array([40, 90, 0]), np.array([70, 255, 180])),

@@ -107,22 +107,18 @@ class VisionModule:
 			npc = np.array(cont)
 			npc = npc[:,0,:]
 
-			
+			npc = np.c_[npc, np.ones((npc.shape[0], 1), np.int32)] # new column : is real observed point
 			
 			# discard points on the edge of the screen and sort left to right (if two points are at same x prefer larger y (lower on the screen))
 			# this is so later when we get unique elements the lower one is kept
-			npc = npc[(npc[:,1] > 0) & (npc[:,1] < SCREEN_HEIGHT-1) & (npc[:,0] > 0) & (npc[:,0] < SCREEN_WIDTH-1), :]
+			npc = npc[(npc[:,0] > 0) & (npc[:,0] < SCREEN_WIDTH-1), :]
+			#npc = npc[(npc[:,1] > 0) & (npc[:,1] < SCREEN_HEIGHT-1) & (npc[:,0] > 0) & (npc[:,0] < SCREEN_WIDTH-1), :]
 			npc = npc[np.argsort(npc[:, 0]), :]
 
-			if npc.size < 3:
+			if npc.shape[0] < 3:
 				continue
 
-			# this is too annoying to do in the case of multiple contours
-			# add a 0 point before and after so that the dist map counts blank spaces correctly
-			# if npc[0,0] > 1: # any with 0 were removed so first being =1 is acceptable
-			# 	npc = np.r_[[[npc[0,0]-1, SCREEN_HEIGHT-1]], npc]
-			# if npc[-1,0] < SCREEN_WIDTH-2:# any with SCREEN_WIDTH-1 were removed so first being =SCREEN_WIDTH-2 is acceptable
-			# 	npc = np.r_[npc, [[npc[-1,0]+1, SCREEN_HEIGHT-1]]]	
+				
 
 			
 			# # append to comvined_contour
@@ -130,14 +126,23 @@ class VisionModule:
 				combined_contour = npc
 			else:
 				combined_contour = np.r_[combined_contour, npc]
+		
+		if combined_contour is not None:
+			combined_contour = combined_contour[np.argsort(combined_contour[:,0])]
+		
+			# add a 0 point before and after so that the dist map counts blank spaces correctly
+			if combined_contour[0,0] > 1: # any with 0 were removed so first being =1 is acceptable
+				combined_contour = np.r_[[[combined_contour[0,0]-1, SCREEN_HEIGHT-1, 0]], combined_contour]
+			if combined_contour[-1,0] < SCREEN_WIDTH-2:# any with SCREEN_WIDTH-1 were removed so first being =SCREEN_WIDTH-2 is acceptable
+				combined_contour = np.r_[combined_contour, [[combined_contour[-1,0]+1, SCREEN_HEIGHT-1, 0]]]
+
 		return combined_contour
 
 	@classmethod
 	def project_and_filter_contour(cls,contour_points):
 		if contour_points is not None:
 			# make sure it is sorted from left to right and only keep one point per column. (lower points preferred)	
-			contour_points = contour_points[np.unique(contour_points[:, 0]+ 1.0-contour_points[:, 1]/SCREEN_HEIGHT, return_index=True)[1]]
-
+			contour_points = contour_points[np.unique(contour_points[:, 0]+ 1.0-contour_points[:, 1]/SCREEN_HEIGHT, return_index=True)[1], :]
 
 			# project contour onto the ground
 			projection = cls.project_point_to_ground(contour_points)
@@ -145,7 +150,7 @@ class VisionModule:
 			# discard points above the horizon
 			mask = projection[:, 0] >= 0
 			projection = projection[mask]
-			contour_points = contour_points[mask]
+			contour_points = contour_points[mask, :]
 			return contour_points, projection
 		else:
 			return None, None
@@ -157,12 +162,27 @@ class VisionModule:
 		
 		# find which point matches to which pixel considering duplicates and skips
 		dist_map = np.zeros(SCREEN_WIDTH, np.float32)
-		j = 0
-		for i in range(len(dist_map)):
+		real_points = np.zeros(SCREEN_WIDTH, np.float32)
+		j = 0 # jth point
+		for i in range(len(dist_map)): # ith pixel
 			while j < len(contour_points)-1 and contour_points[j, 0] < i:
 				j += 1
-			dist_map[i] = dist_real[j]
-		return dist_map
+
+			# if we are not on the first point we can consider the previous point
+			# and if out current point is past the current pixel we should look at the previous point
+			if j > 0 and contour_points[j, 0] > i: 
+				# we would take nearest, minimum, interpolate etc
+				# take the one with max distance
+				if dist_real[j-1] > dist_real[j]:
+					dist_map[i] = dist_real[j-1]
+					real_points[i] = contour_points[j-1, 2]
+				else:
+					dist_map[i] = dist_real[j]
+					real_points[i] = contour_points[j, 2]
+			else:
+				dist_map[i] = dist_real[j]
+				real_points[i] = contour_points[j, 2]
+		return np.c_[dist_map, real_points]
 	#endregion
 
 	focal_length = 70 #cm
@@ -228,10 +248,10 @@ class VisionModule:
 		img, imgHSV, robotview = Specific.get_image()
 
 		
-		contoursShelf, ShelfMask = cls.findShelf(imgHSV)
+		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 
 		# Detect obstacles in the HSV image
-		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV)
+		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
 
 		# Get the list of detected obstacles' centers and dimensions
 		detected_obstacles = cls.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obs", Draw=False)
@@ -255,13 +275,14 @@ class VisionModule:
 		points = cls.combine_contour_points(contours, False)
 		points, projected_floor = cls.project_and_filter_contour(points)
 		dist_map = None
+		real_mappoints = None
 		if points is not None and points.size > 0:
 			# draw
-			cv2.polylines(robotview, [points], False, (0, 0, 255), 1) # draw
+			cv2.polylines(robotview, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
 
-			dist_map = cls.get_dist_map(points, projected_floor)
+			dist_map = cls.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
 
-			cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+			cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
 		
 		
@@ -307,12 +328,12 @@ class VisionModule:
 		return contoursItem, ItemMask
 
 	@classmethod
-	def findShelf(cls, imgHSV, area_threshold=10000):
+	def findShelf(cls, imgHSV, area_threshold=10000, chain=cv2.CHAIN_APPROX_SIMPLE):
 		# Create a mask for the blue color range
 		ShelfMask = cv2.inRange(imgHSV, cls.color_ranges['blue'][0], cls.color_ranges['blue'][1])
 		
 		# Find contours on the mask
-		contoursShelf, _ = cv2.findContours(ShelfMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		contoursShelf, _ = cv2.findContours(ShelfMask, cv2.RETR_EXTERNAL,chain)
 		
 		# Filter out small contours by area
 		#filtered_contours = [cnt for cnt in contoursShelf if cv2.contourArea(cnt) > area_threshold]
@@ -326,9 +347,9 @@ class VisionModule:
 		return contoursLoadingArea, LoadingAreaMask
 
 	@classmethod
-	def findObstacle(cls, imgHSV):
+	def findObstacle(cls, imgHSV, chain=cv2.CHAIN_APPROX_SIMPLE):
 		ObstacleMask = cv2.inRange(imgHSV, cls.color_ranges['green'][0], cls.color_ranges['green'][1])
-		contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, chain)
 		return contoursObstacle, ObstacleMask
 	
 	@classmethod

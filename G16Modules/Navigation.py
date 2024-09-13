@@ -77,6 +77,7 @@ class NavigationModule:
 		cls.current_state = initial_state
 		cls.t_now = time.time()
 		cls.call_current_start()
+		cls.forced_avoidance_start()
 	
 	
 
@@ -110,11 +111,13 @@ class NavigationModule:
 	
 	
 	@classmethod
-	def expand_safety(cls,dist_map):
+	def expand_safety(cls, dist_map):
 		d_theta = FOV_HORIZONTAL / SCREEN_WIDTH # angle per pixel horizontally
 
 		# left to right
-		dist_map = dist_map.copy()
+		
+		should_expand = dist_map[:, 1]
+		dist_map = dist_map[:,0].copy()
 
 		effect = []
 		for i, curr_dist in enumerate(dist_map):
@@ -133,26 +136,24 @@ class NavigationModule:
 			else:
 				# if effect is empty include this point and continue
 				dist_map[i] = curr_dist
-				effect.append((curr_dist, new_angle_left))
+				if should_expand[i]:
+					effect.append((curr_dist, new_angle_left))
 				continue
-
-			
 
 			if curr_dist < min_dist_effect: # If this point is a new minimum, store it
 				# update the current point
 				dist_map[i] = curr_dist
 				# add the current point
-				effect.append((curr_dist, new_angle_left))
+				if should_expand[i]:
+					effect.append((curr_dist, new_angle_left))
 			else: # If this point is not a new minimum then take the minimum effective dist
 				# update the current point
 				dist_map[i] = min_dist_effect
-				if new_angle_left > effect[min_dist_index][1]: # Still make this point effective if it might expire later than the current minimum effective point
+				if new_angle_left > effect[min_dist_index][1] and should_expand[i]: # Still make this point effective if it might expire later than the current minimum effective point
 					# add the current point
 					effect.append((curr_dist, new_angle_left))
 
 			
-			
-		
 		# right to left
 		effect = []
 		for i, curr_dist in enumerate(reversed(dist_map)):
@@ -171,20 +172,20 @@ class NavigationModule:
 			else:
 				# if effect is empty include this point and continue
 				dist_map[-i-1] = curr_dist
-				effect.append((curr_dist, new_angle_left))
+				if should_expand[-1-i]:
+					effect.append((curr_dist, new_angle_left))
 				continue
-
-			
 
 			if curr_dist < min_dist_effect: # If this point is a new minimum, store it
 				# update the current point
 				dist_map[-1-i] = curr_dist
 				# add the current point
-				effect.append((curr_dist, new_angle_left))
+				if should_expand[-1-i]:
+					effect.append((curr_dist, new_angle_left))
 			else: # If this point is not a new minimum then take the minimum effective dist
 				# update the current point
 				dist_map[-1-i] = min_dist_effect
-				if new_angle_left > effect[min_dist_index][1]: # Still make this point effective if it might expire later than the current minimum effective point
+				if new_angle_left > effect[min_dist_index][1] and should_expand[-1-i]: # Still make this point effective if it might expire later than the current minimum effective point
 					# add the current point
 					effect.append((curr_dist, new_angle_left))
 		return dist_map
@@ -202,28 +203,31 @@ class NavigationModule:
 	def forced_avoidance(cls, dist_map):
 		if dist_map is not None:
 			# Forced Avoidance
-			left_dist = dist_map[0]
-			right_dist = dist_map[-1]
+			left_dist = dist_map[dist_map[:,1]>0][0,0]
+			right_dist = dist_map[dist_map[:,1]>0][-1,0]
+			print(f"{left_dist:.2f}, {right_dist:.2f}")
 			
 			change_in_left = left_dist - cls.last_left_dist
 			change_in_right = right_dist - cls.last_right_dist
 			
 			# if we were within 0.3m of an obstacle and cant see it anymore
 			# (edge distance increased by 0.2 or more,  *this only works for shelves, if there are narrow obstacles it will be weird* )
-			if change_in_left > 0.2 and cls.last_left_dist < 0.4 and cls.last_fwd > 0 and cls.last_rot > 0:
+			if change_in_left > 0.2 and cls.last_left_dist < 0.4 and cls.last_fwd > 0:# and cls.last_rot > 0:
 				print("AVOID LEFT!")
 				cls.avoid_left = cls.last_left_dist * sin(pi/3)+0.2
 				cls.left_obstacle_dist = cls.last_left_dist
-			if change_in_right > 0.2 and cls.last_right_dist < 0.4 and cls.last_fwd > 0 and cls.last_rot < 0:
+			if change_in_right > 0.2 and cls.last_right_dist < 0.4 and cls.last_fwd > 0:# and cls.last_rot < 0:
 				print("AVOID RIGHT!")
 				cls.avoid_right = cls.last_right_dist * sin(pi/3)+0.2
 				cls.right_obstacle_dist = cls.last_right_dist
 
 			# if we are avoiding an obstacle just act like it is still there on the edge
 			if cls.avoid_left > 0:
-				dist_map[0] = cls.left_obstacle_dist
+				dist_map[0,0] = cls.left_obstacle_dist
+				dist_map[0,1] = 1 # treat as real point (expand in safety)
 			if cls.avoid_right > 0:
-				dist_map[-1] = cls.right_obstacle_dist
+				dist_map[-1,0] = cls.right_obstacle_dist
+				dist_map[-1,1] = 1 # treat as real point (expand in safety)
 			
 			cls.last_left_dist = left_dist
 			cls.last_right_dist = right_dist
@@ -251,13 +255,13 @@ class NavigationModule:
 
 	@classmethod
 	def wander_start(cls):
-		cls.forced_avoidance_start()
+		pass
 		
 
 	@classmethod
 	def wander_update(cls, delta, debug_img, aisle, marker_distance, marker_bearing, points, projected_floor, dist_map):
 
-		if marker_distance is not None:
+		if marker_distance is not None and abs(marker_bearing) < 0.8:
 			return STATE.AISLE_DOWN, debug_img
 
 		if points is not None and points.size > 0:
@@ -273,7 +277,7 @@ class NavigationModule:
 			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
 
 
-			if safety_map.max() == safety_map.min():
+			if abs(safety_map.max() - safety_map.min()) < 0.01:
 				# no safe path- turn and dont move forward
 				
 				goal_error = (dist_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
@@ -308,7 +312,7 @@ class NavigationModule:
 	
 	@classmethod
 	def aisle_down_start(cls):
-		cls.forced_avoidance_start()
+		pass
 		
 
 	@classmethod
@@ -333,17 +337,23 @@ class NavigationModule:
 			attractive_map = np.zeros(safety_map.size)
 			for i in range(safety_map.size):
 				bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
-				attractive_map[i] = 1.0 - abs(bearing - marker_bearing)
+				attractive_map[i] = 1.0 - 0.2 * abs(bearing - marker_bearing)
 			
-			potential_map = attractive_map * safety_map
+			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
 
-			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
-			debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
-			
+			if abs(safety_map.min() - safety_map.max()) < 0.01:
+				forward_vel = -cls.MAX_ROBOT_VEL/2
+				rotational_vel = 0
+			else:
+				potential_map = attractive_map + safety_map
 
-			goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
-			rotational_vel = goal_error*cls.Kp
-			forward_vel = cls.MAX_ROBOT_VEL * (1.0 - 4.0 * cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+				debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+				
+
+				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * pi/3
+				rotational_vel = goal_error*cls.Kp
+				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - 4.0 * cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
 			
 			cls.forced_avoidance_timer_update(forward_vel/5, delta)
