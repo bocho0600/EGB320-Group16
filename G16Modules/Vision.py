@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from math import cos,sin
+from math import cos,sin, pi
 import time
 from threading import Thread, Lock, Condition
 
@@ -35,10 +35,10 @@ class VisionModule:
 	# ANGLE_H = packerBotSim.horizontalViewAngle
 	# ANGLE_V = packerBotSim.verticalViewAngle
 
-	DIST_X = 0 #packerBotSim.robotParameters.cameraDistanceFromRobotCenter
-	DIST_Z = 0.0752 #packerBotSim.robotParameters.cameraHeightFromFloor
+	DIST_X = 0.09 #packerBotSim.robotParameters.cameraDistanceFromRobotCenter
+	DIST_Z = 0.085 #packerBotSim.robotParameters.cameraHeightFromFloor
 	# tilt = packerBotSim.robotParameters.cameraTilt
-	TILT = 1.5 * 3.1415926535 / 180
+	TILT = 8.785 * pi / 180
 	# tilt is meant to be 0 but it is slightly off in simulator
 
 	# Precalculate Transformation Matrices and ground plane
@@ -193,8 +193,8 @@ class VisionModule:
 		return np.c_[dist_map, real_points]
 	#endregion
 
-	focal_length = 70 #cm
-	real_circle_diameter = 70 #cm
+	focal_length = 35 #mm
+	real_circle_diameter = 70 #mm
 
  
 	t1 = time.time()
@@ -211,7 +211,7 @@ class VisionModule:
 		contoursShelf, ShelfMask = VisionModule.findShelf(imgHSV)
 		ShelfCenter = VisionModule.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "She", Draw = DebugDraw)
 		if ShelfCenter != None:
-			ShelfAngle = VisionModule.GetBearing(ShelfCenter[1])
+			ShelfAngle = VisionModule.GetBearing(ShelfCenter[1]) * 180 / pi
 			cv2.putText(robotview, f"Angle: {int(ShelfAngle)} cm", (int(ShelfCenter[0]), int(ShelfCenter[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
 		
 		# Detect obstacles in the HSV image
@@ -227,7 +227,7 @@ class VisionModule:
 				x_ObstacleCenter, y_ObstacleCenter, ObHeight, ObWidth = obstacle
 				
 				# Calculate the obstacle's angle and distance
-				ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter)
+				ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter) * 180 / pi
 				ObstacleDistance = VisionModule.GetDistance(ObHeight, 150)
 
 				# Add the angle and distance information to the image
@@ -244,7 +244,7 @@ class VisionModule:
 		if detected_markers is not None:
 			for marker in detected_markers:
 				x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
-				MarkerAngle = VisionModule.GetBearing(x_MarkerCenter)
+				MarkerAngle = VisionModule.GetBearing(x_MarkerCenter) * 180 / pi
 				MarkerDistance = VisionModule.GetDistance(MaHeight, 70)
 				cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
 				cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
@@ -508,7 +508,7 @@ class VisionModule:
 		return (cls.focal_length * real_width) / width + 4
 	
 	@classmethod
-	def GetBearing(cls, x_center):
+	def GetBearing(cls, x_center): # RADIANS!!!
 		offset_pixels = x_center - SCREEN_WIDTH/ 2
 		return offset_pixels * FOV_HORIZONTAL / SCREEN_WIDTH
 

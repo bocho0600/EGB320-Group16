@@ -14,24 +14,30 @@ def main(): # Main function
 	# Possibly override color ranges for simulator
 	if hasattr(Specific, 'color_ranges'):
 		VisionModule.color_ranges = Specific.color_ranges
-	if hasattr(Specific, 'focal_length'):
-		VisionModule.focal_length = Specific.focal_length
 
 
 	try:
 		
 		Specific.start()
-		instruction = instructions[2]
+		instruction = instructions[1]
 		
 		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction) # instruction 2 is aisle 2 bay 2
 
 		while True:
 			
-			robotview, visout = VisionModule.Pipeline()
-			# print(marker_distance, marker_bearing)
-			robotview = NavigationModule.update(robotview, visout)
+			pipeline = 'nav'
 
-			VisionModule.ExportImage("RobotView", robotview, FPS = True)
+			if pipeline == 'vision':
+				robotview = VisionModule.DebugPipeline(True)
+				VisionModule.ExportImage("RobotView", robotview, FPS = True)
+			else:
+				
+				robotview, visout = VisionModule.Pipeline()
+				# print(marker_distance, marker_bearing)
+				robotview = NavigationModule.update(robotview, visout)
+
+				VisionModule.ExportImage("RobotView", robotview, FPS = True)
+
 			Specific.update()
 
 			if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit

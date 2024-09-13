@@ -35,7 +35,7 @@ class NavigationModule:
 
 
 	
-	MAX_ROBOT_VEL = 0.2 # m/s
+	MAX_ROBOT_VEL = 0.4 # m/s
 	ROTATIONAL_BIAS = 0.8 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
 	MAX_ROBOT_ROT = pi/3 * Kp # rad/s
@@ -203,7 +203,7 @@ class NavigationModule:
 
 	@classmethod
 	def forced_avoidance(cls, dist_map):
-		if dist_map is not None:
+		if dist_map is not None and (dist_map[:, 1]>1).any():
 			# Forced Avoidance
 			left_dist = dist_map[dist_map[:,1]>0][0,0]
 			right_dist = dist_map[dist_map[:,1]>0][-1,0]
@@ -236,6 +236,7 @@ class NavigationModule:
 		else:
 			cls.last_left_dist = 0.3
 			cls.last_right_dist = 0.3
+			return dist_map
 	
 	@classmethod
 	def forced_avoidance_timer_update(cls, fwd, delta):
@@ -262,12 +263,16 @@ class NavigationModule:
 	@classmethod
 	def wander_update(cls, delta, debug_img, visout):
 
+		
+		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8:
+			return STATE.AISLE_DOWN, debug_img
+
 		points = VisionModule.combine_contour_points(visout.contours, False)
 		points = VisionModule.handle_outer_contour(points)
 		points, projected_floor = VisionModule.project_and_filter_contour(points)
 		
 		dist_map = None
-		if points is not None and points.size > 0:
+		if points is not None and points.shape[0] > 3:
 			# draw
 			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
 
@@ -275,12 +280,6 @@ class NavigationModule:
 
 			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
-
-		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8:
-			return STATE.AISLE_DOWN, debug_img
-
-		if points is not None and points.size > 0:
-
 			dist_map = cls.forced_avoidance(dist_map)
 			if cls.avoid_left > 0:
 				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
@@ -303,7 +302,7 @@ class NavigationModule:
 
 				debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
-				if cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
+				if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
 					return cls.next_state, debug_img
 			else:
 				# move into the longest safe path
@@ -313,7 +312,7 @@ class NavigationModule:
 
 				debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 
-				if cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
+				if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
 					return cls.next_state, debug_img
 				
 			
@@ -392,7 +391,7 @@ class NavigationModule:
 		points = VisionModule.handle_outer_contour(points)
 		points, projected_floor = VisionModule.project_and_filter_contour(points)
 		dist_map = None
-		if points is not None and points.size > 0:
+		if points is not None and points.shape[0] > 3:
 			# draw
 			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
 
@@ -401,7 +400,6 @@ class NavigationModule:
 			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
 
-		if points is not None and points.size > 0:
 
 			dist_map = cls.forced_avoidance(dist_map)
 			if cls.avoid_left > 0:
@@ -435,8 +433,8 @@ class NavigationModule:
 				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - 4.0 * cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
 			
-			cls.forced_avoidance_timer_update(forward_vel/5, delta)
-			cls.set_velocity(forward_vel/5,rotational_vel/5)
+			cls.forced_avoidance_timer_update(forward_vel, delta)
+			cls.set_velocity(forward_vel,rotational_vel)
 		else:
 			return STATE.LOST, debug_img
 		

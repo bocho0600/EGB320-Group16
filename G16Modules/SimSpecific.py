@@ -22,7 +22,6 @@ class SimSpecific:
             'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
 		}
 
-    focal_length = 35 #cm
 
     # SET SCENE PARAMETERS
     sceneParameters = SceneParameters()
