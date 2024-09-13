@@ -14,13 +14,15 @@ class SimSpecific:
     color_ranges = {
             'floor': (np.array([0, 0, 80]), np.array([0, 0, 135])),
             'wall': (np.array([0, 0, 146]), np.array([30, 1, 255])),
-            'blue': (np.array([3, 171, 54]), np.array([3, 175, 112])),
+            'blue': (np.array([1, 165, 50]), np.array([10, 200, 120])),
             'black': (np.array([0, 0, 0]), np.array([0, 0, 0])),
             'yellow': (np.array([99, 216, 130]), np.array([99, 217, 187])),
             'green': (np.array([40, 90, 0]), np.array([70, 255, 180])),
             'orange1': (np.array([5, 150, 150]), np.array([20, 255, 255])),
             'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
 		}
+
+    focal_length = 35 #cm
 
     # SET SCENE PARAMETERS
     sceneParameters = SceneParameters()
@@ -43,8 +45,9 @@ class SimSpecific:
         img = cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 0)
         img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT), cv2.INTER_NEAREST)
         imgHSV = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        robotview = img #.copy()
 
-        return img, imgHSV
+        return img, imgHSV, robotview
 
     
     @classmethod

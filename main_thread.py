@@ -33,6 +33,7 @@ class CamFrameGrabber:
             self.currentFrame = self.camera.capture_array()
 
       def start(self):
+            self.t1 = time.time()
             Thread(target=self.captureImage, args=()).start()
             return self
 
@@ -53,13 +54,13 @@ class CamFrameGrabber:
             return imgRGB, imgHSV, RobotView
       
       def getFrameID(self):
-            self.t1 = time.time()
             return self.frame_id
       
       def DisplayFrame(self, frame, frame_id, FPS=False):
             if frame_id != self.prev_frame_id:
                   if FPS:
                         fps = 1.0 / (time.time() - self.t1)  # calculate frame rate
+                        self.t1 = time.time()
                         cv2.putText(frame, f'{int(fps)}', (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 100), 2)  # Display the FPS on the screen
                   cv2.imshow('frame', frame)
                   self.prev_frame_id = frame_id
@@ -131,6 +132,7 @@ def main():
 
                   # Check if markers were detected
                   if marker_centers is not None:
+                      # Loop through each detected markers and process it
                         for center in marker_centers:
                               x_center, y_center, radius = center
                               MarkerAngle = vision.GetBearing(x_center, imgRGB)
