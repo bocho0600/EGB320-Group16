@@ -4,6 +4,7 @@ from .Globals import *
 import time
 from threading import Thread, Condition
 import numpy as np
+from .Mobility import MobilityModule
 
 class RealSpecific:
 
@@ -45,7 +46,9 @@ class RealSpecific:
 		cls.camera.start()
 	
 	def set_velocity(fwd, rot):
-		# not implemented
+		a = 166.73 # multiply m/s to get PWM value 0 to 100
+		rot_ms = rot * 0.17/2 # rad/s to m/s
+		MobilityModule.Move(fwd*a, rot*a)
 		pass
 
 	@classmethod
