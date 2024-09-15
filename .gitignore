@@ -1,11 +1,11 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-!COPPELIA_FILES/PythonCode/roverbot_lib.pyc
+!*roverbot_lib.pyc
 
 # C extensions
 *.so
-!COPPELIA_FILES/PythonCode/remoteApi*.so
+!*remoteApi*.so
 
 # Distribution / packaging
 .Python
