@@ -501,7 +501,7 @@ class NavigationModule:
 	@classmethod
 	def collect_item_start(cls):
 		cls.set_velocity(cls.MAX_ROBOT_VEL/4,0, 0)
-		cls.collect_item_fwd_remaining = 0.03
+		cls.collect_item_fwd_remaining = 0.06
 	
 	@classmethod
 	def collect_item_update(cls, delta, debug_img, visout):
