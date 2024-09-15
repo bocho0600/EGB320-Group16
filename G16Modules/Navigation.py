@@ -35,14 +35,15 @@ class NavigationModule:
 
 
 	
-	MAX_ROBOT_VEL = 0.4 # m/s
-	ROTATIONAL_BIAS = 0.8 #tweak this parameter to be more or less aggressive with turns vs straight
+	MAX_ROBOT_VEL = 0.13 # m/s
+	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
-	MAX_ROBOT_ROT = pi/3 * Kp # rad/s
+	MAX_ROBOT_ROT = pi/6 # rad/s
 	RADIUS = 0.15 # how far to stay away from wall
 
 	@classmethod
-	def set_velocity(cls, fwd, rot):
+	def set_velocity(cls, fwd, rot, delta):
+		cls.forced_avoidance_timer_update(fwd, delta)
 		cls.last_fwd = fwd
 		cls.last_rot = rot
 		Specific.set_velocity(fwd, rot)
@@ -203,23 +204,25 @@ class NavigationModule:
 
 	@classmethod
 	def forced_avoidance(cls, dist_map):
-		if dist_map is not None and (dist_map[:, 1]>1).any():
+		if dist_map is not None and (dist_map[:, 1]>0).any():
 			# Forced Avoidance
 			left_dist = dist_map[dist_map[:,1]>0][0,0]
 			right_dist = dist_map[dist_map[:,1]>0][-1,0]
 			
 			change_in_left = left_dist - cls.last_left_dist
 			change_in_right = right_dist - cls.last_right_dist
+
+			# print(f"{left_dist:.2f}, {right_dist:.2f}")
 			
 			# if we were within 0.3m of an obstacle and cant see it anymore
 			# (edge distance increased by 0.2 or more,  *this only works for shelves, if there are narrow obstacles it will be weird* )
 			if change_in_left > 0.2 and cls.last_left_dist < 0.4 and cls.last_fwd > 0:# and cls.last_rot > 0:
 				print("AVOID LEFT!")
-				cls.avoid_left = cls.last_left_dist * sin(FOV_HORIZONTAL)+0.2
+				cls.avoid_left = cls.last_left_dist * sin(FOV_HORIZONTAL)+0.1
 				cls.left_obstacle_dist = cls.last_left_dist
 			if change_in_right > 0.2 and cls.last_right_dist < 0.4 and cls.last_fwd > 0:# and cls.last_rot < 0:
 				print("AVOID RIGHT!")
-				cls.avoid_right = cls.last_right_dist * sin(FOV_HORIZONTAL)+0.2
+				cls.avoid_right = cls.last_right_dist * sin(FOV_HORIZONTAL)+0.1
 				cls.right_obstacle_dist = cls.last_right_dist
 
 			# if we are avoiding an obstacle just act like it is still there on the edge
@@ -264,7 +267,8 @@ class NavigationModule:
 	def wander_update(cls, delta, debug_img, visout):
 
 		
-		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8:
+		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8 and visout.aisle == cls.target_aisle:
+			cls.wander_until_distance = None
 			return STATE.AISLE_DOWN, debug_img
 
 		points = VisionModule.combine_contour_points(visout.contours, False)
@@ -295,43 +299,47 @@ class NavigationModule:
 				# no safe path- turn and dont move forward
 				
 				goal_error = (dist_map[:,0].argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
-				rotational_vel = goal_error*cls.Kp
+				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
 
 				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
 				forward_vel = 0
 
 				debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
-				if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
-					return cls.next_state, debug_img
+				if abs(goal_error) < 0.05: #radians
+					print("Probably stuck")
+					cls.wander_until_distance = None
+					return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
+				
 			else:
 				# move into the longest safe path
 				goal_error = (safety_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
-				rotational_vel = goal_error*cls.Kp
+				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
 				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
 				debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 
-				if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
-					return cls.next_state, debug_img
+			if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
+				cls.wander_until_distance = None
+				return cls.next_state, debug_img
 				
-			
-			
 		else:
 			cls.forced_avoidance(None)
-			rotational_vel = pi/2
+			rotational_vel = cls.MAX_ROBOT_ROT
 			forward_vel = 0
 
 
+	
 
-		cls.forced_avoidance_timer_update(forward_vel/5, delta)
-		cls.set_velocity(forward_vel/5,rotational_vel/5)
+		
+		cls.set_velocity(forward_vel,rotational_vel, delta)
 
 		return STATE.WANDER, debug_img
 	
 	@classmethod
 	def fafo_start(cls):
-		pass
+		if not hasattr(cls, 'fafo_react_marker'):
+			cls.fafo_react_marker = False
 
 	@classmethod
 	def fafo_update(cls, delta, debug_img, visout):
@@ -339,26 +347,30 @@ class NavigationModule:
 		# Aisle 2: rotate right until we cant see shelf then change to wander to continue rotating right until we see a shelf and move forward until we are 1m away then switch back to fafo
 		# Aisle 3: rotate until we see a marker
 
-		if visout.aisle is not None and visout.aisle == cls.target_aisle:
+		if cls.fafo_react_marker and visout.aisle is not None and visout.aisle == cls.target_aisle:
 			return STATE.AISLE_DOWN, debug_img
 
 
 		if cls.target_aisle == 1:
 			if visout.detected_shelves is not None:
-				cls.set_velocity(0, 0.4)
+				cls.set_velocity(0, cls.MAX_ROBOT_ROT, delta)
 			else:
+				# Wander until we get stuck
+				cls.fafo_react_marker = True # When we get stuck we go to fafo then we should find the marker
 				return STATE.WANDER, debug_img
 		elif cls.target_aisle == 2:
 			if visout.detected_shelves is not None:
-				cls.set_velocity(0, 0.4)
+				cls.set_velocity(0, cls.MAX_ROBOT_ROT, delta)
 			else:
-				cls.wander_until_distance = 1.3 # "metres" it is fairly off, should be about 1.1
+				# Wander until we are that far from furthest point
+				cls.fafo_react_marker = True # When we get back to fafo then we should find the marker
+				cls.wander_until_distance = 1.3 # "metres"
 				cls.next_state = STATE.FIND_AISLE_FROM_OUTSIDE
 				return STATE.WANDER, debug_img
 				
 		elif cls.target_aisle == 3:
 			if visout.aisle is None or visout.aisle < 1:
-				cls.set_velocity(0, 0.4)
+				cls.set_velocity(0, cls.MAX_ROBOT_ROT, delta)
 			else:
 				return STATE.AISLE_DOWN, debug_img
 		else:
@@ -429,12 +441,12 @@ class NavigationModule:
 				
 
 				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
-				rotational_vel = goal_error*cls.Kp
-				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - 4.0 * cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
+				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
 			
-			cls.forced_avoidance_timer_update(forward_vel, delta)
-			cls.set_velocity(forward_vel,rotational_vel)
+			
+			cls.set_velocity(forward_vel,rotational_vel, delta)
 		else:
 			return STATE.LOST, debug_img
 		
@@ -444,7 +456,7 @@ class NavigationModule:
 	@classmethod
 	def face_bay_start(cls):
 		cls.turn_to_bay_remaining = pi/2
-		cls.set_velocity(0,0)
+		cls.set_velocity(0,0, 0)
 	
 	@classmethod
 	def face_bay_update(cls, delta, debug_img, visout):
@@ -457,14 +469,14 @@ class NavigationModule:
 
 		if cls.target_side == "Left":
 			rot = -rot
-		cls.set_velocity(0, rot)
+		cls.set_velocity(0, rot, delta)
 
 		return STATE.FACE_BAY, debug_img
 
 
 	@classmethod
 	def collect_item_start(cls):
-		cls.set_velocity(0,0)
+		cls.set_velocity(cls.MAX_ROBOT_VEL/4,0, 0)
 	
 	@classmethod
 	def collect_item_update(cls, delta, debug_img, visout):

@@ -32,14 +32,7 @@ class VisionModule:
 
 	
 	#region Contour Processing 
-	# ANGLE_H = packerBotSim.horizontalViewAngle
-	# ANGLE_V = packerBotSim.verticalViewAngle
-
-	DIST_X = 0.09 #packerBotSim.robotParameters.cameraDistanceFromRobotCenter
-	DIST_Z = 0.085 #packerBotSim.robotParameters.cameraHeightFromFloor
-	# tilt = packerBotSim.robotParameters.cameraTilt
-	TILT = 8.785 * pi / 180
-	# tilt is meant to be 0 but it is slightly off in simulator
+	# DIST_X, DIST_Z and TILT are defined in Globals.py
 
 	# Precalculate Transformation Matrices and ground plane
 	camera_to_robot_rotate = np.array([
