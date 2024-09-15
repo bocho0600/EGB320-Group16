@@ -19,7 +19,7 @@ def main(): # Main function
 	try:
 		
 		Specific.start()
-		instruction = instructions[3] # 1 2 4
+		instruction = instructions[4] # 1 2 4
 		
 		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction)
 

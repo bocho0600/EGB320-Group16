@@ -372,7 +372,7 @@ class NavigationModule:
 				
 		elif cls.target_aisle == 3:
 			if visout.aisle is None or visout.aisle < 1:
-				cls.set_velocity(0, cls.MAX_ROBOT_ROT, delta)
+				cls.set_velocity(0, -0.6 * cls.MAX_ROBOT_ROT, delta)
 			else:
 				return STATE.AISLE_DOWN, debug_img
 		else:
