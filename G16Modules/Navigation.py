@@ -11,6 +11,7 @@ STATE = Enum('STATE', [
 	'WANDER',
 	'FIND_AISLE_FROM_OUTSIDE',
 	'AISLE_DOWN',
+	'AISLE_DOWN_BAY3',
 	'FACE_BAY',
 	'COLLECT_ITEM',
 	'FACE_OUT',
@@ -65,15 +66,16 @@ class NavigationModule:
 		cls.target_object = instruction[4]
 		print(f"Aisle: {cls.target_aisle}, Bay: {cls.target_bay}, Side: {cls.target_side}")
 
-		shelf_length = 112 #cm
-		bay_width = shelf_length / 4
-		cls.target_bay_distance = shelf_length - bay_width/2 - cls.target_bay*bay_width
+		cls.shelf_length = 112 #cm
+		cls.bay_width = cls.shelf_length / 4
+		cls.target_bay_distance = cls.shelf_length - cls.bay_width/2 - cls.target_bay*cls.bay_width
 		print(f"We want to be {cls.target_bay_distance} cm from aisle marker {cls.target_aisle}")
 
 		cls.state_callbacks[STATE.LOST] = (cls.lost_start, cls.lost_update)
 		cls.state_callbacks[STATE.WANDER] = (cls.wander_start, cls.wander_update)
 		cls.state_callbacks[STATE.FIND_AISLE_FROM_OUTSIDE] = (cls.fafo_start, cls.fafo_update)
 		cls.state_callbacks[STATE.AISLE_DOWN] = (cls.aisle_down_start, cls.aisle_down_update)
+		cls.state_callbacks[STATE.AISLE_DOWN_BAY3] = (cls.adb3_start, cls.adb3_update)
 		cls.state_callbacks[STATE.FACE_BAY] = (cls.face_bay_start, cls.face_bay_update)
 		cls.state_callbacks[STATE.COLLECT_ITEM] = (cls.collect_item_start, cls.collect_item_update)
 
@@ -390,8 +392,10 @@ class NavigationModule:
 		if visout.marker_distance is None:
 			return STATE.LOST, debug_img
 		
-		if visout.marker_distance < cls.target_bay_distance:
+		if cls.target_bay < 3 and visout.marker_distance < cls.target_bay_distance:
 			return STATE.FACE_BAY, debug_img
+		elif cls.target_bay == 3 and visout.marker_distance < (cls.target_bay_distance + cls.bay_width):
+			return STATE.AISLE_DOWN_BAY3, debug_img
 
 		if visout.aisle > cls.target_aisle:
 			# Go back to fafo if we can see MORE markers than we should.
@@ -454,6 +458,26 @@ class NavigationModule:
 		return STATE.AISLE_DOWN, debug_img
 	
 	@classmethod
+	def adb3_start(cls):
+		cls.adb3_remaining = cls.bay_width/100 # cm to m
+		cls.set_velocity(0,0,0)
+
+	@classmethod
+	def adb3_update(cls, delta, debug_img, visout):
+
+		goal_error = visout.marker_bearing
+		rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
+		forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+		cls.set_velocity(forward_vel, rotational_vel, delta)
+
+		cls.adb3_remaining -= forward_vel*delta
+		if cls.adb3_remaining <= 0:
+			return STATE.FACE_BAY, debug_img
+
+
+		return STATE.AISLE_DOWN_BAY3, debug_img
+
+	@classmethod
 	def face_bay_start(cls):
 		cls.turn_to_bay_remaining = pi/2
 		cls.set_velocity(0,0, 0)
@@ -477,9 +501,18 @@ class NavigationModule:
 	@classmethod
 	def collect_item_start(cls):
 		cls.set_velocity(cls.MAX_ROBOT_VEL/4,0, 0)
+		cls.collect_item_fwd_remaining = 0.03
 	
 	@classmethod
 	def collect_item_update(cls, delta, debug_img, visout):
+		if cls.collect_item_fwd_remaining > 0:
+			fwd = cls.MAX_ROBOT_VEL/4
+			cls.set_velocity(fwd,0,delta)
+			cls.collect_item_fwd_remaining -= fwd*delta
+		else:
+			cls.set_velocity(0,0,delta)
+
+
 		return STATE.COLLECT_ITEM, debug_img
 	
 	#endregion
