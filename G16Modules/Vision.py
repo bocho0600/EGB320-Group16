@@ -256,22 +256,10 @@ class VisionModule:
 
 		# Detect obstacles in the HSV image
 		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
-
-		# Get the list of detected obstacles' centers and dimensions
-		detected_obstacles = cls.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obs", Draw=False)
-		
-		# Assuming contoursMarkers is a list of contours found using cv2.findContours
-		contoursMarkers, MarkerMask = cls.findMarkers(imgHSV)
-
-		# # Get the list of detected markers' center and dimensions
-		# detected_markers = cls.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=False)
-
-		# aisle, marker_distance, marker_bearing, marker_x, marker_y = cls.ProcessAisleMarkers(detected_markers)
-
 		
 		WallRGB,  WallImgGray, WallMask = cls.findWall(imgHSV,img)
 		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
-		avg_center, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img)
+		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img)
 
 		if aisle is not None and aisle != 0:
 			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
@@ -398,7 +386,7 @@ class VisionModule:
 
 				# Check if the difference between areas is within the threshold
 				if abs(contour_area - circle_area) <= area_difference_threshold:
-					MarkerAngle = cls.GetBearing(x, imgRGB)
+					MarkerAngle = cls.GetBearing(x)
 					MarkerDistance = cls.GetDistance(radius * 2, 70)
 					# cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), 
 					#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
