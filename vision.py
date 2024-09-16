@@ -330,7 +330,7 @@ class VisionModule:
                 # Check if the difference between areas is within the threshold
                 if abs(contour_area - circle_area) <= area_difference_threshold:
                     MarkerAngle = self.GetBearing(x, imgRGB)
-                    MarkerDistance = self.GetDistance(radius * 2, 70)
+                    MarkerDistance = self.GetDistance(radius * 2, 80)
                     # cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), 
                     #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
                     # cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x), int(y)), 

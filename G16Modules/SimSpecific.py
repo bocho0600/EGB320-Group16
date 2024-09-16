@@ -24,7 +24,7 @@ class SimSpecific:
 
 
     if is_hitl: # hardware in the loop
-        coppelia_server_ip = '192.168.57.29'
+        coppelia_server_ip = '172.20.10.10'
     else:
         coppelia_server_ip = '127.0.0.1'
 
@@ -68,7 +68,7 @@ class SimSpecific:
     def update(cls):
         cls.packerBotSim.UpdateObjectPositions() # needs to be called once at the end of the main code loop
         if is_hitl:
-            time.sleep(0.4)
+            time.sleep(1.0)
 
     @classmethod
     def end(cls):

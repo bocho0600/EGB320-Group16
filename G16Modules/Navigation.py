@@ -5,6 +5,7 @@ import time
 
 from .Globals import *
 from .Vision import VisionModule
+from .ItemCollection import ItemCollectionModule
 
 STATE = Enum('STATE', [
 	'LOST',
@@ -511,6 +512,7 @@ class NavigationModule:
 			cls.collect_item_fwd_remaining -= fwd*delta
 		else:
 			cls.set_velocity(0,0,delta)
+			ItemCollectionModule.gripper_close(1)
 
 
 		return STATE.COLLECT_ITEM, debug_img

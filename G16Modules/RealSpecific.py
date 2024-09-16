@@ -5,6 +5,7 @@ import time
 from threading import Thread, Condition
 import numpy as np
 from .Mobility import MobilityModule
+from .ItemCollection import ItemCollectionModule
 
 class RealSpecific:
 
@@ -53,20 +54,28 @@ class RealSpecific:
 
 	@classmethod
 	def start(cls, grabber = True):
+		ItemCollectionModule.init()
+		
 		cls.initialize_camera()
 		if grabber:
 			cls.frameGrabber = CamFrameGrabber(cls.camera, SCREEN_WIDTH, SCREEN_HEIGHT)
 			cls.frameGrabber.start()
 
+
+
 	@classmethod
 	def update(cls):
-		pass
+		if ItemCollectionModule.is_initialized:
+			ItemCollectionModule.update()
 
 	@classmethod
 	def end(cls):
 		cls.frameGrabber.stop()
 		cls.camera.close()
 		cls.set_velocity(0,0)
+
+		if ItemCollectionModule.is_initialized:
+			ItemCollectionModule.end()
 
 
 # Define the CamFrameGrabber class
