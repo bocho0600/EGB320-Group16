@@ -382,10 +382,12 @@ class COPPELIA_WarehouseRobot(object):
 				rightWheelSpeed = 0
 
 			# set motor speeds
+			coppelia.simxPauseCommunication(self.clientID,1)
 			errorCode = coppelia.simxSetJointTargetVelocity(self.clientID, self.leftMotorHandle, leftWheelSpeed, coppelia.simx_opmode_oneshot)
 			errorCode = coppelia.simxSetJointTargetVelocity(self.clientID, self.rightMotorHandle, rightWheelSpeed, coppelia.simx_opmode_oneshot) 
 			# errorCode2 = coppelia.simxSetJointTargetVelocity(self.clientID, self.leftRearMotorHandle, leftWheelSpeed, coppelia.simx_opmode_oneshot)
 			# errorCode2 = coppelia.simxSetJointTargetVelocity(self.clientID, self.rightRearMotorHandle, rightWheelSpeed, coppelia.simx_opmode_oneshot) 
+			coppelia.simxPauseCommunication(self.clientID,0)
 			if errorCode != 0:
 				print('Failed to set left and/or right motor speed. Error code %d'%errorCode)
 
