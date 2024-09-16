@@ -31,14 +31,15 @@ def main():
                   if contoursShelf:
                         points = VisionModule.combine_contour_points(contoursShelf, False)
                         points, projected_floor = VisionModule.project_and_filter_contour(points)
-                        dist_map = VisionModule.get_dist_map(points, projected_floor)
-                        closest_idx = np.argmin(dist_map[:,0])
-                        points_index = np.argmax(points[:, 0] >= closest_idx)
-                        closest_shelf_dist = dist_map[closest_idx, 0] * 100
-                        closest_point_x = points[points_index, 0]
-                        closest_point_y = points[points_index, 1]
-                        cv2.drawMarker(RobotView, (closest_point_x, closest_point_x), (0, 255, 0), markerType=cv2.MARKER_TILTED_CROSS, markerSize=20, thickness=1)
-                        cv2.putText(RobotView,  f"D: {int(closest_shelf_dist)}", (closest_point_x, closest_point_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+                        if points is not None and points.shape[0] > 3:
+                              dist_map = VisionModule.get_dist_map(points, projected_floor)
+                              closest_idx = np.argmin(dist_map[:,0])
+                              points_index = np.argmax(points[:, 0] >= closest_idx)
+                              closest_shelf_dist = dist_map[closest_idx, 0] * 100
+                              closest_point_x = points[points_index, 0]
+                              closest_point_y = points[points_index, 1]
+                              cv2.drawMarker(RobotView, (closest_point_x, closest_point_x), (0, 255, 0), markerType=cv2.MARKER_TILTED_CROSS, markerSize=20, thickness=1)
+                              cv2.putText(RobotView,  f"D: {int(closest_shelf_dist)}", (closest_point_x, closest_point_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
 
 
 
