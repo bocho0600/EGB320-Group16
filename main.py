@@ -1,6 +1,6 @@
 import cv2
 #import numpy as np
-#import time
+import time
 from G16Modules.Globals import *
 from G16Modules.Vision import VisionModule
 from G16Modules.Navigation import NavigationModule, STATE
@@ -19,26 +19,36 @@ def main(): # Main function
 	try:
 		
 		Specific.start()
-		instruction = instructions[2] # 1 2 4
+		instruction = instructions[3] # 1 2 4
 		
-		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction)
+		NavigationModule.init(STATE.WANDER, instruction)
+		t1 = time.time()
 
 		while True:
 			
 			pipeline = 'nav'
+			draw = False
 
 			if pipeline == 'vision':
 				robotview = VisionModule.DebugPipeline(True)
 				VisionModule.ExportImage("RobotView", robotview, FPS = True)
 			else:
 				
-				robotview, visout = VisionModule.Pipeline()
+				robotview, visout = VisionModule.Pipeline(draw)
 				# print(marker_distance, marker_bearing)
-				robotview = NavigationModule.update(robotview, visout)
 				
-				VisionModule.ExportImage("RobotView", robotview, FPS = True)
+				if draw:
+					robotview = NavigationModule.update(robotview, visout)
+					VisionModule.ExportImage("RobotView", robotview, FPS = True)
+				else:
+					robotview = NavigationModule.update(None, visout)
+
 
 			Specific.update()
+
+			t2 = time.time()
+			print(f"FPS: {1.0/(t2-t1):.1f}")
+			t1 = t2
 
 			if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
 				break

@@ -5,7 +5,7 @@ import time
 from threading import Thread, Condition
 import numpy as np
 from .Mobility import MobilityModule
-from .ItemCollection import ItemCollectionModule
+# from .ItemCollection import ItemCollectionModule
 
 class RealSpecific:
 
@@ -49,12 +49,12 @@ class RealSpecific:
 	def set_velocity(fwd, rot):
 		a = 165 # multiply m/s to get PWM value 0 to 100
 		rot_ms = rot * 0.17/2 # rad/s to m/s
-		MobilityModule.Move(-fwd*a, rot_ms*a)
+		# MobilityModule.Move(-fwd*a, rot_ms*a)
 		pass
 
 	@classmethod
 	def start(cls, grabber = True):
-		ItemCollectionModule.init()
+		# ItemCollectionModule.init()
 		
 		cls.initialize_camera()
 		if grabber:
@@ -65,8 +65,9 @@ class RealSpecific:
 
 	@classmethod
 	def update(cls):
-		if ItemCollectionModule.is_initialized:
-			ItemCollectionModule.update()
+		pass
+		# if ItemCollectionModule.is_initialized:
+		# 	ItemCollectionModule.update()
 
 	@classmethod
 	def end(cls):
@@ -74,8 +75,8 @@ class RealSpecific:
 		cls.camera.close()
 		cls.set_velocity(0,0)
 
-		if ItemCollectionModule.is_initialized:
-			ItemCollectionModule.end()
+		# if ItemCollectionModule.is_initialized:
+		# 	ItemCollectionModule.end()
 
 
 # Define the CamFrameGrabber class

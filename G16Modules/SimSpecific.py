@@ -24,7 +24,7 @@ class SimSpecific:
 
 
     if is_hitl: # hardware in the loop
-        coppelia_server_ip = '172.20.10.10'
+        coppelia_server_ip = '192.168.235.29'
     else:
         coppelia_server_ip = '127.0.0.1'
 

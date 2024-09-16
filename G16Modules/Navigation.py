@@ -40,7 +40,7 @@ class NavigationModule:
 	MAX_ROBOT_VEL = 0.13 # m/s
 	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
-	MAX_ROBOT_ROT = pi/6 # rad/s
+	MAX_ROBOT_ROT = pi/3 # rad/s
 	RADIUS = 0.15 # how far to stay away from wall
 
 	@classmethod
@@ -125,25 +125,31 @@ class NavigationModule:
 		should_expand = dist_map[:, 1]
 		dist_map = dist_map[:,0].copy()
 
+		cls.time_tick("safety: copy")
+
 		effect = []
 		for i, curr_dist in enumerate(dist_map):
+			current_angle = i * d_theta - FOV_HORIZONTAL/2
+
 			# update points in effect. Decrease the angle and discard expired points
-			effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
+			# effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
+			effect = list(filter(lambda e: e[1] > current_angle, effect))
 			
 			# How long would this point be effective for if we stored it
-			new_angle_left = np.arctan(cls.RADIUS/curr_dist)
+			
+			new_expiry_angle = current_angle + np.arctan(cls.RADIUS/curr_dist)
 
 			# The maximum distance allowed at this point is the minimum dist of points still in effect
 			# The minimum effective point.
 			if len(effect)>0:
-				dists = [dist for dist,angle_left in effect]
+				dists = [dist for dist,expiry_angle in effect]
 				min_dist_effect = min(dists)
 				min_dist_index = dists.index(min_dist_effect)
 			else:
 				# if effect is empty include this point and continue
 				dist_map[i] = curr_dist
 				if should_expand[i]:
-					effect.append((curr_dist, new_angle_left))
+					effect.append((curr_dist, new_expiry_angle))
 				continue
 
 			if curr_dist < min_dist_effect: # If this point is a new minimum, store it
@@ -151,49 +157,53 @@ class NavigationModule:
 				dist_map[i] = curr_dist
 				# add the current point
 				if should_expand[i]:
-					effect.append((curr_dist, new_angle_left))
+					effect.append((curr_dist, new_expiry_angle))
 			else: # If this point is not a new minimum then take the minimum effective dist
 				# update the current point
 				dist_map[i] = min_dist_effect
-				if new_angle_left > effect[min_dist_index][1] and should_expand[i]: # Still make this point effective if it might expire later than the current minimum effective point
+				if new_expiry_angle > effect[min_dist_index][1] and should_expand[i]: # Still make this point effective if it might expire later than the current minimum effective point
 					# add the current point
-					effect.append((curr_dist, new_angle_left))
-
+					effect.append((curr_dist, new_expiry_angle))
+		cls.time_tick("safety: lr")
 			
 		# right to left
 		effect = []
 		for i, curr_dist in enumerate(reversed(dist_map)):
+			current_angle = -i * d_theta + FOV_HORIZONTAL/2
+
 			# update points in effect. Decrease the angle and discard expired points
-			effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
+			# effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
+			effect = list(filter(lambda e: e[1] < current_angle, effect))
 			
 			# How long would this point be effective for if we stored it
-			new_angle_left = np.arctan(cls.RADIUS/curr_dist)
+			new_expiry_angle = current_angle - np.arctan(cls.RADIUS/curr_dist)
 
 			# The maximum distance allowed at this point is the minimum dist of points still in effect
 			# The minimum effective point.
 			if len(effect)>0:
-				dists = [dist for dist,angle_left in effect]
+				dists = [dist for dist,expiry_angle in effect]
 				min_dist_effect = min(dists)
 				min_dist_index = dists.index(min_dist_effect)
 			else:
 				# if effect is empty include this point and continue
 				dist_map[-i-1] = curr_dist
-				if should_expand[-1-i]:
-					effect.append((curr_dist, new_angle_left))
+				if should_expand[-i-1]:
+					effect.append((curr_dist, new_expiry_angle))
 				continue
 
 			if curr_dist < min_dist_effect: # If this point is a new minimum, store it
 				# update the current point
-				dist_map[-1-i] = curr_dist
+				dist_map[-i-1] = curr_dist
 				# add the current point
-				if should_expand[-1-i]:
-					effect.append((curr_dist, new_angle_left))
+				if should_expand[-i-1]:
+					effect.append((curr_dist, new_expiry_angle))
 			else: # If this point is not a new minimum then take the minimum effective dist
 				# update the current point
-				dist_map[-1-i] = min_dist_effect
-				if new_angle_left > effect[min_dist_index][1] and should_expand[-1-i]: # Still make this point effective if it might expire later than the current minimum effective point
+				dist_map[-i-1] = min_dist_effect
+				if new_expiry_angle < effect[min_dist_index][1] and should_expand[i]: # Still make this point effective if it might expire later than the current minimum effective point
 					# add the current point
-					effect.append((curr_dist, new_angle_left))
+					effect.append((curr_dist, new_expiry_angle))
+		cls.time_tick("safety: rl")
 		return dist_map
 
 	@classmethod
@@ -266,37 +276,63 @@ class NavigationModule:
 		pass
 		
 
+	times = []
+	tnames = []
+	@classmethod
+	def time_start(cls):
+		cls.times = [time.time()]
+		cls.tnames = []
+	
+	@classmethod
+	def time_tick(cls, name):
+		cls.times.append(time.time())
+		cls.tnames.append(name)
+
+	
+	@classmethod
+	def time_show(cls):
+		for i in range(len(cls.tnames)):
+			print(f"{cls.tnames[i]}: \t{cls.times[i+1] - cls.times[i]:.4f}")
+
+
 	@classmethod
 	def wander_update(cls, delta, debug_img, visout):
-
+		cls.time_start()
 		
 		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8 and visout.aisle == cls.target_aisle:
 			cls.wander_until_distance = None
-			return STATE.AISLE_DOWN, debug_img
+			# return STATE.AISLE_DOWN, debug_img
 
 		points = VisionModule.combine_contour_points(visout.contours, False)
 		points = VisionModule.handle_outer_contour(points)
 		points, projected_floor = VisionModule.project_and_filter_contour(points)
 		
+		cls.time_tick("projection")
+
 		dist_map = None
 		if points is not None and points.shape[0] > 3:
-			# draw
-			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
-
+	
 			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
-
-			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+		
+			if debug_img:
+				# draw
+				cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
+				cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
 			dist_map = cls.forced_avoidance(dist_map)
-			if cls.avoid_left > 0:
-				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
-			if cls.avoid_right > 0:
-				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+
+			if debug_img:
+				if cls.avoid_left > 0:
+					debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
+				if cls.avoid_right > 0:
+					debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
 
 			safety_map = cls.expand_safety(dist_map)
 			
-			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
-
+			if debug_img:
+				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+			
+			cls.time_tick("fa + safety")
 
 			if abs(safety_map.max() - safety_map.min()) < 0.01:
 				# no safe path- turn and dont move forward
@@ -307,7 +343,8 @@ class NavigationModule:
 				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
 				forward_vel = 0
 
-				debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
+				if debug_img:
+					debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
 				if abs(goal_error) < 0.05: #radians
 					print("Probably stuck")
@@ -320,7 +357,10 @@ class NavigationModule:
 				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
 				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
-				debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+				if debug_img:
+					debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+
+			cls.time_tick("goalpot")
 
 			if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
 				cls.wander_until_distance = None
@@ -333,9 +373,10 @@ class NavigationModule:
 
 
 	
-
+		cls.time_show()
 		
 		cls.set_velocity(forward_vel,rotational_vel, delta)
+
 
 		return STATE.WANDER, debug_img
 	
@@ -409,20 +450,21 @@ class NavigationModule:
 		points, projected_floor = VisionModule.project_and_filter_contour(points)
 		dist_map = None
 		if points is not None and points.shape[0] > 3:
-			# draw
-			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
-
+			
 			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
 
-			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+			if debug_img:
+				# draw
+				cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
+				cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
-
-
 			dist_map = cls.forced_avoidance(dist_map)
-			if cls.avoid_left > 0:
-				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
-			if cls.avoid_right > 0:
-				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+			
+			if debug_img:
+				if cls.avoid_left > 0:
+					debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
+				if cls.avoid_right > 0:
+					debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
 
 			safety_map = cls.expand_safety(dist_map)
 			# repulsive_map = (safety_map < 0.3)*1
@@ -432,7 +474,8 @@ class NavigationModule:
 				bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
 				attractive_map[i] = 1.0 - 0.6 * abs(bearing - visout.marker_bearing)
 			
-			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
+			if debug_img:
+				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
 
 			if abs(safety_map.min() - safety_map.max()) < 0.01:
 				cls.forced_avoidance_start() #reset FA
@@ -441,8 +484,9 @@ class NavigationModule:
 			else:
 				potential_map = attractive_map + safety_map
 
-				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
-				debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+				if debug_img:
+					debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+					debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 				
 
 				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
@@ -501,13 +545,13 @@ class NavigationModule:
 
 	@classmethod
 	def collect_item_start(cls):
-		cls.set_velocity(cls.MAX_ROBOT_VEL/4,0, 0)
+		cls.set_velocity(cls.MAX_ROBOT_VEL/2,0, 0)
 		cls.collect_item_fwd_remaining = 0.06
 	
 	@classmethod
 	def collect_item_update(cls, delta, debug_img, visout):
 		if cls.collect_item_fwd_remaining > 0:
-			fwd = cls.MAX_ROBOT_VEL/4
+			fwd = cls.MAX_ROBOT_VEL/2
 			cls.set_velocity(fwd,0,delta)
 			cls.collect_item_fwd_remaining -= fwd*delta
 		else:

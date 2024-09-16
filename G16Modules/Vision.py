@@ -244,14 +244,14 @@ class VisionModule:
 		return robotview
 
 	@classmethod
-	def Pipeline(cls):
+	def Pipeline(cls, draw=True):
 		img, imgHSV, robotview = Specific.get_image()
 
 		
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 
 		# Get the list of detected shelves' centers and dimensions
-		detected_shelves = cls.GetContoursObject(contoursShelf, robotview, (0, 255, 255), "She", Draw=False)
+		detected_shelves = cls.GetContoursObject(contoursShelf, robotview, (0, 255, 255), "She", Draw=draw)
 
 
 		# Detect obstacles in the HSV image
@@ -259,9 +259,9 @@ class VisionModule:
 		
 		WallRGB,  WallImgGray, WallMask = cls.findWall(imgHSV,img)
 		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
-		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img, draw=False)
+		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img, draw=draw)
 
-		if aisle is not None and aisle != 0:
+		if draw and aisle is not None and aisle != 0:
 			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
 			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(avg_center[0]), int(avg_center[1])-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
