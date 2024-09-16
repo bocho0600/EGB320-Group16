@@ -259,7 +259,7 @@ class VisionModule:
 		
 		WallRGB,  WallImgGray, WallMask = cls.findWall(imgHSV,img)
 		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
-		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img)
+		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img, draw=False)
 
 		if aisle is not None and aisle != 0:
 			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
@@ -369,7 +369,7 @@ class VisionModule:
 		return ContoursMarkers, mask1
 	
 	@classmethod
-	def GetInfoMarkers(cls, robotview, ContoursMarkers, imgRGB):
+	def GetInfoMarkers(cls, robotview, ContoursMarkers, imgRGB, draw=True):
 		distance = []
 		bearing = []
 		centers = []
@@ -388,14 +388,15 @@ class VisionModule:
 				if abs(contour_area - circle_area) <= area_difference_threshold:
 					MarkerAngle = cls.GetBearing(x)
 					MarkerDistance = cls.GetDistance(radius * 2, 70)
-					# cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), 
-					#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-					# cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x), int(y)), 
-					#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
-					cv2.circle(robotview, center, int(radius), (255, 255), 2)
-					cv2.drawMarker(robotview, center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
-					cv2.putText(robotview, f"M", (int(x - 6), int(y + radius / 2)), 
-								cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
+					if draw:
+						# cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), 
+						#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+						# cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x), int(y)), 
+						#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+						cv2.circle(robotview, center, int(radius), (255, 255), 2)
+						cv2.drawMarker(robotview, center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
+						cv2.putText(robotview, f"M", (int(x - 6), int(y + radius / 2)), 
+									cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
 					
 					# Store the distance, bearing, and center
 					distance.append(MarkerDistance)
