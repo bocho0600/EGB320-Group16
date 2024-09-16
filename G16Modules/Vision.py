@@ -18,16 +18,15 @@ class VisionOutput:
 
 class VisionModule:
 	color_ranges = {
-		'wall': (np.array([39, 0, 0]), np.array([162, 255, 255])),
+		'wall': (np.array([34, 0, 211]), np.array([45, 74, 255])),
 		'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
-		'yellow': (np.array([25, 90, 0]), np.array([36, 233, 255])),
+		'yellow': (np.array([29, 177, 244]), np.array([30, 251, 255])),
 		'blue': (np.array([81, 0, 0]), np.array([116, 255, 255])),
 		'green': (np.array([55, 79, 0]), np.array([70, 255, 255])),
 		'orange1': (np.array([0, 100, 0]), np.array([20, 255, 255])),
 		'orange2': (np.array([165, 100, 0]), np.array([180, 255, 255])),
-		'black': (np.array([29,53, 0]), np.array([51, 103, 81]))
+		'black': (np.array([38,31, 45]), np.array([66, 121 , 88]))
 	}
-
 
 
 	
@@ -264,14 +263,20 @@ class VisionModule:
 		# Assuming contoursMarkers is a list of contours found using cv2.findContours
 		contoursMarkers, MarkerMask = cls.findMarkers(imgHSV)
 
-		# Get the list of detected markers' center and dimensions
-		detected_markers = cls.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=False)
+		# # Get the list of detected markers' center and dimensions
+		# detected_markers = cls.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=False)
 
-		aisle, marker_distance, marker_bearing, marker_x, marker_y = cls.ProcessAisleMarkers(detected_markers)
+		# aisle, marker_distance, marker_bearing, marker_x, marker_y = cls.ProcessAisleMarkers(detected_markers)
+
+		
+		WallRGB,  WallImgGray, WallMask = cls.findWall(imgHSV,img)
+		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
+		avg_center, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img)
 
 		if aisle is not None and aisle != 0:
-			cv2.drawMarker(robotview, (int(marker_x), int(marker_y)), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
-			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(marker_x), int(marker_y)-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
+			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(avg_center[0]), int(avg_center[1])-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
 
 		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
 
@@ -282,18 +287,6 @@ class VisionModule:
 		
 		return robotview, VisionOutput(aisle=aisle, marker_distance=marker_distance, marker_bearing=marker_bearing, contours=contours, detected_shelves=detected_shelves)
 
-		
-
-	# @classmethod
-	# def Capturing(cls):
-
-	# 	img, imgHSV = Specific.get_image()  # Capture a single image frame
-
-	# 	# t2 = time.time()
-	# 	# cls.fps = 1.0 / (t2-cls.t1)
-	# 	# cls.t1 = t2
-
-	# 	return img, imgHSV
 
 	@classmethod
 	def ExportImage(cls, WindowName, view, FPS=False):
@@ -347,75 +340,103 @@ class VisionModule:
 		return contoursObstacle, ObstacleMask
 	
 	@classmethod
-	def findMarkers(cls, imgHSV):
-		BlackMask = cv2.inRange(imgHSV, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
-		contoursMarkers, _= cv2.findContours(BlackMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-		return contoursMarkers, BlackMask
-	
-	# Function to check contour circularity
-	@classmethod
-	def is_circular(contour):
-		area = cv2.contourArea(contour)
-		if area == 0:
-			return False
-		perimeter = cv2.arcLength(contour, True)
-		circularity = 4 * np.pi * (area / (perimeter * perimeter))
-		return circularity > 0.7  # Adjust threshold as needed
-
-
-	@classmethod
-	def MarkerShapeDetection(cls, contoursMarkers, output,image):
-		detected = False
-		shapeCount = 0
-		distances = []  # List to store distances for all detected circles
-		bearings = []   # List to store bearings for all detected circles
-
-		for contour in contoursMarkers:
-			if (1 < cv2.contourArea(contour) < 50000):  # Area filter
-				epsilon = 0.03 * cv2.arcLength(contour, True)
-				ShapeContours = cv2.approxPolyDP(contour, epsilon, True)
-				#num_vertices = len(ShapeContours)
-				num_vertices = 8
-				print(num_vertices)
-				print(shapeCount, "markers detected")
-
-				#if num_vertices == 4:
-					#shape = "Square"
-				if num_vertices in [4, 12]:  # Avoiding conflict with squares
-					shapeCount += 1
-					print(shapeCount, "circle detected")
-					shape = "Circle"
-
-					# Find the center and radius of the circle
-					(x_center, y_center), radius = cv2.minEnclosingCircle(contour)
-					diameter = 2 * radius
-
-					# Calculate distance and bearing
-					distance = cls.GetDistance(diameter, 70)
-					bearing = cls.GetBearing(x_center,image)
-
-					distances.append(distance)  # Store each distance
-					bearings.append(bearing)    # Store each bearing
-
-					# Draw text and circle on the output image
-					cv2.putText(output, f"Distance: {distance:.2f} cm", 
-								(int(x_center), int(y_center)), 
-								cv2.FONT_HERSHEY_SIMPLEX, 0.5, (123, 200, 100), 2)
-					cv2.putText(output, f"Circle: {shapeCount}", 
-								(int(x_center), int(y_center) - 10), 
-								cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
-					cv2.circle(output, (int(x_center), int(y_center)), 
-							int(radius), (0, 255, 0), 2)
-
-					detected = True
-
-		if detected:
-			return shapeCount, distances, bearings  # Return list of distances and bearings
+	def findWall(cls, imgHSV, imgRGB):
+		# Create masks for the orange color
+		WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
+		
+		# Find contours in the mask
+		contoursWall1, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		
+		# Check if any contours are found
+		if contoursWall1:
+			# Find the largest contour
+			largest_contour = max(contoursWall1, key=cv2.contourArea)
+			
+			# Create an empty mask and draw the largest contour on it
+			filledWallMask = np.zeros_like(WallMask)
+			cv2.drawContours(filledWallMask, [largest_contour], -1, (255), thickness=cv2.FILLED)
+			
+			# Apply Gaussian blur to the filled mask
+			filledWallMask = cv2.GaussianBlur(filledWallMask, (9, 9), 2)
+			
+			# Use the filled mask to extract the wall image
+			WallImg = cv2.bitwise_and(imgRGB, imgRGB, mask=filledWallMask)
+			
+			# Convert the extracted image to grayscale
+			WallImgGray = cv2.cvtColor(WallImg, cv2.COLOR_BGR2GRAY)
 		else:
-			return 0, [], []  # Return zero shapes, and empty lists for distances and bearings
+			# No contours found, return original image and empty mask
+			WallImg = np.zeros_like(imgRGB)
+			WallImgGray = np.zeros_like(cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY))
+			filledWallMask = np.zeros_like(WallMask)
+		
+		return WallImg, WallImgGray, filledWallMask
 
+	@classmethod
+	def findMarkers(cls, WallImgGray, WallMask):
+		_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+		markers = cv2.bitwise_and(WallMask, mask)
+		_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
+		ContoursMarkers, _ = cv2.findContours(mask1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		return ContoursMarkers, mask1
+	
+	@classmethod
+	def GetInfoMarkers(cls, robotview, ContoursMarkers, imgRGB):
+		distance = []
+		bearing = []
+		centers = []
 
+		for contours in ContoursMarkers:
+			if cv2.contourArea(contours) > 100:
+				(x, y), radius = cv2.minEnclosingCircle(contours)
+				center = (int(x), int(y))
+				circle_area = np.pi * (radius ** 2)
+				contour_area = cv2.contourArea(contours)
 				
+				# Define the acceptable difference threshold
+				area_difference_threshold = 5000  # You can adjust this value
+
+				# Check if the difference between areas is within the threshold
+				if abs(contour_area - circle_area) <= area_difference_threshold:
+					MarkerAngle = cls.GetBearing(x, imgRGB)
+					MarkerDistance = cls.GetDistance(radius * 2, 70)
+					# cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), 
+					#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+					# cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x), int(y)), 
+					#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+					cv2.circle(robotview, center, int(radius), (255, 255), 2)
+					cv2.drawMarker(robotview, center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
+					cv2.putText(robotview, f"M", (int(x - 6), int(y + radius / 2)), 
+								cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
+					
+					# Store the distance, bearing, and center
+					distance.append(MarkerDistance)
+					bearing.append(MarkerAngle)
+					centers.append(center)
+
+		# Calculate the average center if there are any centers
+		if centers:
+			avg_x = sum([c[0] for c in centers]) / len(centers)
+			avg_y = sum([c[1] for c in centers]) / len(centers)
+			avg_center = (int(avg_x), int(avg_y))
+			avg_distance = sum(distance) / len(distance)
+			avg_bearing = sum(bearing) / len(bearing)
+			shape_count = len(centers)
+			cv2.drawMarker(robotview, avg_center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
+			cv2.putText(robotview, f"A: {int(avg_bearing)} deg", (int(avg_x), int(avg_y + 20)), 
+						cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+			cv2.putText(robotview, f"D: {int(avg_distance)} cm", (int(avg_x), int(avg_y)),
+						cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+			cv2.putText(robotview, f"{shape_count}", (int(avg_x - 10), int(avg_y)),
+						cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+		else:
+			avg_center = None  # If no centers were found, return None or a default value
+			avg_bearing = None
+			avg_distance = None
+			shape_count = 0
+
+		return avg_center, avg_bearing, avg_distance, shape_count
+
 	
 	@classmethod
 	def GetContoursShelf(cls, contours, output, colour, text, Draw=True):
@@ -471,30 +492,7 @@ class VisionModule:
 		else:
 			return None
 
-	@classmethod
-	def ProcessAisleMarkers(cls, detectedMarkers):
-
-		if detectedMarkers is None or len(detectedMarkers) < 1:
-			return 0, None, None, None, None
-		
-		xs = []
-		ys = []
-		dists = []
-		bearings = []
-		for x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth in detectedMarkers:
-			xs.append(x_MarkerCenter)
-			ys.append(y_MarkerCenter)
-
-			bearings.append(VisionModule.GetBearing(x_MarkerCenter))
-			dists.append(VisionModule.GetDistance(MaHeight, 70))
-
-		distance = np.median(np.array(dists)) # incase the height and therefore distance of the third marker is cut off
-		bearing = np.array(bearings).mean()
-		x_center = np.array(xs).mean()
-		y_center = np.array(ys).mean()
-
-
-		return len(detectedMarkers), distance, bearing, x_center, y_center
+	
   
 	@classmethod
 	def GetDistance(cls, width, real_width):

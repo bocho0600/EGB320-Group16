@@ -4,7 +4,7 @@ from math import pi
 SCREEN_WIDTH = 410
 SCREEN_HEIGHT = 308
 
-is_simulator = True
+is_simulator = False
 is_hitl = True
 
 if is_simulator:
@@ -19,8 +19,8 @@ else:
 	FOV_HORIZONTAL = 64.4 * pi/180 # radians
 
 	DIST_X = 0.09 # cameraDistanceFromRobotCenter
-	DIST_Z = 0.085 # cameraHeightFromFloor
-	TILT = 8.785 * pi / 180
+	DIST_Z = 0.109 # cameraHeightFromFloor
+	TILT = -8.785 * pi / 180
 	
 	from .RealSpecific import RealSpecific as Specific
 

@@ -46,9 +46,9 @@ class RealSpecific:
 		cls.camera.start()
 	
 	def set_velocity(fwd, rot):
-		a = 40.73 # multiply m/s to get PWM value 0 to 100
+		a = 165 # multiply m/s to get PWM value 0 to 100
 		rot_ms = rot * 0.17/2 # rad/s to m/s
-		MobilityModule.Move(fwd*a, rot*a)
+		MobilityModule.Move(-fwd*a, rot_ms*a)
 		pass
 
 	@classmethod
@@ -113,7 +113,7 @@ class CamFrameGrabber:
 		imgFlip = cv2.resize(self.currentFrame, (410, 308))
 		imgRGB = cv2.rotate(imgFlip, cv2.ROTATE_180)
 		imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)  # Convert to HSV
-		RobotView = imgRGB#.copy()  # Preserve the original image
+		RobotView = imgRGB.copy()  # Preserve the original image
 		return imgRGB, imgHSV, RobotView
 
 	def getFrameID(self):

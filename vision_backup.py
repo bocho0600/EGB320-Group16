@@ -5,6 +5,8 @@ from threading import Thread
 import vision as vs
 import time
 
+from G16Modules.Vision import VisionModule
+
 
 def main():
       
@@ -14,7 +16,9 @@ def main():
       cam.start()
       vision = vs.VisionModule()
       try:
+
             while True:
+
                   imgRGB, imgHSV, RobotView = cam.getCurrentFrame()
                   frame_id = cam.getFrameID()
                   CenterCoord = vision.draw_crosshair(RobotView)
@@ -24,6 +28,18 @@ def main():
                   # Get the detected shelf centers
                   ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "S", Draw=True)
                   ShelfCenter, ShelfBearing = vision.GetInfoShelf(RobotView, ShelfCenters, imgRGB)
+                  if contoursShelf:
+                        points = VisionModule.combine_contour_points(contoursShelf, False)
+                        points, projected_floor = VisionModule.project_and_filter_contour(points)
+                        dist_map = VisionModule.get_dist_map(points, projected_floor)
+                        closest_idx = np.argmin(dist_map[:,0])
+                        points_index = np.argmax(points[:, 0] >= closest_idx)
+                        closest_shelf_dist = dist_map[closest_idx, 0] * 100
+                        closest_point_x = points[points_index, 0]
+                        closest_point_y = points[points_index, 1]
+                        cv2.drawMarker(RobotView, (closest_point_x, closest_point_x), (0, 255, 0), markerType=cv2.MARKER_TILTED_CROSS, markerSize=20, thickness=1)
+                        cv2.putText(RobotView,  f"D: {int(closest_shelf_dist)}", (closest_point_x, closest_point_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+
 
 
                   # Detect obstacles in the HSV image
@@ -36,7 +52,7 @@ def main():
                   
                   WallRGB,  WallImgGray, WallMask = vision.findWall(imgHSV,imgRGB)
                   ContoursMarkers, mask1 = vision.findMarkers(WallImgGray, WallMask)
-                  avg_center, avg_distance, avg_center, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
+                  avg_center, avg_bearing, avg_distance, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
 
 
                   cam.DisplayFrame(frame_id, FPS=True, frame=RobotView) # Display the frame with the detected objects.
