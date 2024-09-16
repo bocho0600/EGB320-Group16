@@ -1,5 +1,5 @@
 import cv2
-#import numpy as np
+import numpy as np
 import time
 from G16Modules.Globals import *
 from G16Modules.Vision import VisionModule
@@ -21,19 +21,42 @@ def main(): # Main function
 		Specific.start()
 		instruction = instructions[3] # 1 2 4
 		
-		NavigationModule.init(STATE.WANDER, instruction)
+		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction) # Temp start = wander for debugging. normally it should be find_aisle_from_outside 
 		t1 = time.time()
 
-		while True:
-			
-			pipeline = 'nav'
-			draw = True
+		pipeline = 'nav'
+		draw = True
 
-			if pipeline == 'vision':
-				robotview = VisionModule.DebugPipeline(True)
-				VisionModule.ExportImage("RobotView", robotview, FPS = True)
-			else:
+		while True:
+		
+			if pipeline == 'debug':
+				# Run vision and most CPU-intensive hav code but don't move
+				# robotview = VisionModule.DebugPipeline(draw)
+
+				robotview, visout = VisionModule.Pipeline(False)
+				points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
+				points = VisionModule.handle_outer_contour(points)
+				points, projected_floor = VisionModule.project_and_filter_contour(points)
+				if points is not None and points.shape[0] > 3:
+					dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
+					safety_map = NavigationModule.expand_safety(dist_map)
+
+					if draw:
+						robotview = cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+						robotview = cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+				else:
+					print("No shelf points found")
 				
+				
+				if draw:
+					VisionModule.ExportImage("RobotView", robotview, FPS = True)
+				else:
+					t2 = time.time()
+					print(f"FPS: {1.0/(t2-t1):.1f}")
+					t1 = t2
+
+			else:
+				# Full navigation move to the desired shelf
 				robotview, visout = VisionModule.Pipeline(False)
 				# print(marker_distance, marker_bearing)
 				

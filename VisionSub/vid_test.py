@@ -1,6 +1,15 @@
 import cv2
 import numpy as np
 import vision as vs
+
+
+import cv2
+import math
+
+import cv2
+import math
+
+import cv2
 import math
 
 def is_edge_line(pt1, pt2, image_width, image_height):
@@ -109,7 +118,7 @@ def main():
       image = cv2.imread(image_path)
       print(image.shape)
       image = image[700:2048, 0:2731]
-      #mage = cv2.flip(image, 1)
+      #image = cv2.flip(image, 1)
       if image is None:
             print(f"Error: Could not load image from {image_path}")
             return
