@@ -27,7 +27,6 @@ class VisionModule:
     def __init__(self):
         self.cap = None  # Initialize the camera object as an instance variable
         self.t1 = None
-    import cv2
 
     def draw_crosshair(self, frame, color=(255, 255, 255), thickness=2):
         # Get the dimensions of the frame

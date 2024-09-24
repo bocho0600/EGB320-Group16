@@ -5,7 +5,7 @@ from G16Modules.Globals import *
 from G16Modules.Vision import VisionModule
 from G16Modules.Navigation import NavigationModule, STATE
 #import RP2040 as I2C
-import csvread as csvread
+import VisionSub.csvread as csvread
 
 
 def main(): # Main function
@@ -36,7 +36,7 @@ def main(): # Main function
 				# print(marker_distance, marker_bearing)
 				robotview = NavigationModule.update(robotview, visout)
 				
-				# VisionModule.ExportImage("RobotView", robotview, FPS = True)
+				VisionModule.ExportImage("RobotView", robotview, FPS = True)
 
 			Specific.update()
 
