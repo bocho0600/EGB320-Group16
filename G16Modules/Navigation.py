@@ -5,7 +5,7 @@ import time
 
 from .Globals import *
 from .Vision import VisionModule
-from .ItemCollection import ItemCollectionModule
+# from .ItemCollection import ItemCollectionModule
 
 STATE = Enum('STATE', [
 	'LOST',
@@ -119,7 +119,7 @@ class NavigationModule:
 	@classmethod
 	def expand_safety(cls, dist_map):
 		d_theta = FOV_HORIZONTAL / SCREEN_WIDTH # angle per pixel horizontally
-
+		p_factor = SCREEN_WIDTH / FOV_HORIZONTAL
 		# left to right
 		
 		should_expand = dist_map[:, 1]
@@ -127,83 +127,77 @@ class NavigationModule:
 
 		cls.time_tick("safety: copy")
 
-		effect = []
-		for i, curr_dist in enumerate(dist_map):
-			current_angle = i * d_theta - FOV_HORIZONTAL/2
+		def safety_pass(enumeration, indexf):
+			effect = []
+			for i, curr_dist in enumeration:
+				
 
-			# update points in effect. Decrease the angle and discard expired points
-			# effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
-			effect = list(filter(lambda e: e[1] > current_angle, effect))
-			
-			# How long would this point be effective for if we stored it
-			
-			new_expiry_angle = current_angle + np.arctan(cls.RADIUS/curr_dist)
+				# the points are in order of expiry to so only check the first few until we find one that isnt expired
+				found = False
+				while len(effect) > 0 and not found:
+					if effect[0][1] < i:
+						effect.pop(0)
+					else:
+						found = True
+				
+				# How long would this point be effective for if we stored it
+				new_expiry_pix = int(i + p_factor * np.arctan(cls.RADIUS/curr_dist))
 
-			# The maximum distance allowed at this point is the minimum dist of points still in effect
-			# The minimum effective point.
-			if len(effect)>0:
-				dists = [dist for dist,expiry_angle in effect]
-				min_dist_effect = min(dists)
-				min_dist_index = dists.index(min_dist_effect)
-			else:
 				# if effect is empty include this point and continue
-				dist_map[i] = curr_dist
-				if should_expand[i]:
-					effect.append((curr_dist, new_expiry_angle))
-				continue
+				if len(effect) == 0:
+					dist_map[indexf(i)] = curr_dist
+					if should_expand[indexf(i)]:
+						effect.append((curr_dist, new_expiry_pix))
+					continue
 
-			if curr_dist < min_dist_effect: # If this point is a new minimum, store it
-				# update the current point
-				dist_map[i] = curr_dist
-				# add the current point
-				if should_expand[i]:
-					effect.append((curr_dist, new_expiry_angle))
-			else: # If this point is not a new minimum then take the minimum effective dist
-				# update the current point
-				dist_map[i] = min_dist_effect
-				if new_expiry_angle > effect[min_dist_index][1] and should_expand[i]: # Still make this point effective if it might expire later than the current minimum effective point
+				# The maximum distance allowed at this point is the minimum dist of points still in effect
+				# The minimum effective point.
+				min_dist_effect, min_dist_expiry = effect[0]
+
+				if curr_dist < min_dist_effect: # If this point is a new minimum, store it at the beginning
+					# update the current point
+					dist_map[indexf(i)] = curr_dist
+
+
 					# add the current point
-					effect.append((curr_dist, new_expiry_angle))
-		cls.time_tick("safety: lr")
-			
-		# right to left
-		effect = []
-		for i, curr_dist in enumerate(reversed(dist_map)):
-			current_angle = -i * d_theta + FOV_HORIZONTAL/2
+					if should_expand[indexf(i)]:
+						# first we need to remove any points that expire before this new one
+						found = False
+						while len(effect) > 0 and not found:
+							if effect[0][1] <= new_expiry_pix:
+								effect.pop(0)
+							else:
+								found = True
+						effect.insert(0, (curr_dist, new_expiry_pix))
+				
+				else: # If this point is not a new minimum then take the minimum effective dist
+					# update the current point
+					dist_map[indexf(i)] = min_dist_effect
 
-			# update points in effect. Decrease the angle and discard expired points
-			# effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
-			effect = list(filter(lambda e: e[1] < current_angle, effect))
-			
-			# How long would this point be effective for if we stored it
-			new_expiry_angle = current_angle - np.arctan(cls.RADIUS/curr_dist)
+					# Still make this point effective if it might expire later than the current minimum effective point
+					if should_expand[indexf(i)] and (new_expiry_pix > min_dist_expiry):
+						# first we need to remove any points that expire before this new one
+						
+						# get j to be the index of the first point with dist >= new (curr) dist
+						j = 0
+						while j < len(effect) and effect[j][0] < curr_dist:
+							j += 1
 
-			# The maximum distance allowed at this point is the minimum dist of points still in effect
-			# The minimum effective point.
-			if len(effect)>0:
-				dists = [dist for dist,expiry_angle in effect]
-				min_dist_effect = min(dists)
-				min_dist_index = dists.index(min_dist_effect)
-			else:
-				# if effect is empty include this point and continue
-				dist_map[-i-1] = curr_dist
-				if should_expand[-i-1]:
-					effect.append((curr_dist, new_expiry_angle))
-				continue
+						found = False
+						while j < len(effect) and not found:
+							if effect[j][1] <= new_expiry_pix:
+								effect.pop(j)
+							else:
+								found = True
 
-			if curr_dist < min_dist_effect: # If this point is a new minimum, store it
-				# update the current point
-				dist_map[-i-1] = curr_dist
-				# add the current point
-				if should_expand[-i-1]:
-					effect.append((curr_dist, new_expiry_angle))
-			else: # If this point is not a new minimum then take the minimum effective dist
-				# update the current point
-				dist_map[-i-1] = min_dist_effect
-				if new_expiry_angle < effect[min_dist_index][1] and should_expand[i]: # Still make this point effective if it might expire later than the current minimum effective point
-					# add the current point
-					effect.append((curr_dist, new_expiry_angle))
-		cls.time_tick("safety: rl")
+						# add the current point
+						effect.insert(j, (curr_dist, new_expiry_pix))
+
+			cls.time_tick("safety: pass")
+
+		safety_pass(enumerate(dist_map), lambda i:i)
+		safety_pass(enumerate(reversed(dist_map)), lambda i:-i-1)
+
 		return dist_map
 
 	@classmethod
@@ -260,22 +254,8 @@ class NavigationModule:
 			cls.avoid_right -= fwd * delta
 		if cls.avoid_left>0:
 			cls.avoid_left -= fwd * delta
-	#endregion
+
 	
-	#region State Callbacks
-	@classmethod
-	def lost_start(cls):
-		print("Lost!")
-
-	@classmethod
-	def lost_update(cls,delta, debug_img, *args):
-		return STATE.WANDER, debug_img
-
-	@classmethod
-	def wander_start(cls):
-		pass
-		
-
 	times = []
 	tnames = []
 	@classmethod
@@ -293,6 +273,22 @@ class NavigationModule:
 	def time_show(cls):
 		for i in range(len(cls.tnames)):
 			print(f"{cls.tnames[i]}: \t{cls.times[i+1] - cls.times[i]:.4f}")
+
+
+	#endregion
+	
+	#region State Callbacks
+	@classmethod
+	def lost_start(cls):
+		print("Lost!")
+
+	@classmethod
+	def lost_update(cls,delta, debug_img, *args):
+		return STATE.WANDER, debug_img
+
+	@classmethod
+	def wander_start(cls):
+		pass
 
 
 	@classmethod
@@ -556,7 +552,7 @@ class NavigationModule:
 			cls.collect_item_fwd_remaining -= fwd*delta
 		else:
 			cls.set_velocity(0,0,delta)
-			ItemCollectionModule.gripper_close(1)
+			# ItemCollectionModule.gripper_close(1)
 
 
 		return STATE.COLLECT_ITEM, debug_img
