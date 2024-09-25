@@ -330,7 +330,14 @@ class VisionModule:
 	@classmethod
 	def findWall(cls, imgHSV, imgRGB):
 		# Create masks for the orange color
+		# WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
 		WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
+		
+		# TESTED IN SIMULATOR ONLY! ALLOW PARTIAL MARKERS, MIGHT BREAK IN REAL WORLD
+		# An alternative is to use convex hull
+		# Otherwise we can try to determine which markers are full and which are partial
+		BlackMask = cv2.inRange(imgHSV, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+		WallMask =cv2.bitwise_or(WallMask, BlackMask)
 		
 		# Find contours in the mask
 		contoursWall1, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -368,6 +375,18 @@ class VisionModule:
 		ContoursMarkers, _ = cv2.findContours(mask1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 		return ContoursMarkers, mask1
 	
+	@staticmethod
+	def DebugShowIm(imgRGB, contours=None, markerpoint=None):
+		imgRGB = imgRGB.copy()
+		if contours is not None:
+			imgRGB = cv2.drawContours(imgRGB, contours, -1, (0,0,255), 2)
+		
+		if markerpoint is not None:
+			imgRGB = cv2.drawMarker(imgRGB, markerpoint, (0,255,255), cv2.MARKER_CROSS, 8, 2)
+		
+		cv2.imshow("Quick Debug", imgRGB)
+		cv2.waitKey(1)
+
 	@classmethod
 	def GetInfoMarkers(cls, robotview, ContoursMarkers, imgRGB, draw=True):
 		distance = []
@@ -382,7 +401,8 @@ class VisionModule:
 				contour_area = cv2.contourArea(contours)
 				
 				# Define the acceptable difference threshold
-				area_difference_threshold = 5000  # You can adjust this value
+				# Ignore this as we want incomplete markers (value was 5000)
+				area_difference_threshold = circle_area  # You can adjust this value
 
 				# Check if the difference between areas is within the threshold
 				if abs(contour_area - circle_area) <= area_difference_threshold:

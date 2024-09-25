@@ -27,14 +27,14 @@ def main(): # Main function
 		while True:
 			
 			pipeline = 'nav'
-			draw = False
+			draw = True
 
 			if pipeline == 'vision':
 				robotview = VisionModule.DebugPipeline(True)
 				VisionModule.ExportImage("RobotView", robotview, FPS = True)
 			else:
 				
-				robotview, visout = VisionModule.Pipeline(draw)
+				robotview, visout = VisionModule.Pipeline(False)
 				# print(marker_distance, marker_bearing)
 				
 				if draw:
@@ -43,12 +43,14 @@ def main(): # Main function
 				else:
 					robotview = NavigationModule.update(None, visout)
 
+					t2 = time.time()
+					print(f"FPS: {1.0/(t2-t1):.1f}")
+					t1 = t2
+
 
 			Specific.update()
 
-			t2 = time.time()
-			print(f"FPS: {1.0/(t2-t1):.1f}")
-			t1 = t2
+			
 
 			if cv2.waitKey(1) & 0xFF == ord('q'): # Press 'q' to quit
 				break

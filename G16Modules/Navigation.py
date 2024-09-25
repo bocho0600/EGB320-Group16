@@ -40,7 +40,7 @@ class NavigationModule:
 	MAX_ROBOT_VEL = 0.13 # m/s
 	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
-	MAX_ROBOT_ROT = pi/3 # rad/s
+	MAX_ROBOT_ROT = pi/6 # rad/s
 	RADIUS = 0.15 # how far to stay away from wall
 
 	@classmethod
@@ -125,7 +125,6 @@ class NavigationModule:
 		should_expand = dist_map[:, 1]
 		dist_map = dist_map[:,0].copy()
 
-		cls.time_tick("safety: copy")
 
 		def safety_pass(enumeration, indexf):
 			effect = []
@@ -193,7 +192,6 @@ class NavigationModule:
 						# add the current point
 						effect.insert(j, (curr_dist, new_expiry_pix))
 
-			cls.time_tick("safety: pass")
 
 		safety_pass(enumerate(dist_map), lambda i:i)
 		safety_pass(enumerate(reversed(dist_map)), lambda i:-i-1)
@@ -293,31 +291,29 @@ class NavigationModule:
 
 	@classmethod
 	def wander_update(cls, delta, debug_img, visout):
-		cls.time_start()
 		
 		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8 and visout.aisle == cls.target_aisle:
 			cls.wander_until_distance = None
-			# return STATE.AISLE_DOWN, debug_img
+			return STATE.AISLE_DOWN, debug_img
 
 		points = VisionModule.combine_contour_points(visout.contours, False)
 		points = VisionModule.handle_outer_contour(points)
 		points, projected_floor = VisionModule.project_and_filter_contour(points)
-		
-		cls.time_tick("projection")
+
 
 		dist_map = None
 		if points is not None and points.shape[0] > 3:
 	
 			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
 		
-			if debug_img:
+			if debug_img is not None:
 				# draw
 				cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
 				cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
 			dist_map = cls.forced_avoidance(dist_map)
 
-			if debug_img:
+			if debug_img is not None:
 				if cls.avoid_left > 0:
 					debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
 				if cls.avoid_right > 0:
@@ -325,10 +321,9 @@ class NavigationModule:
 
 			safety_map = cls.expand_safety(dist_map)
 			
-			if debug_img:
+			if debug_img is not None:
 				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
-			
-			cls.time_tick("fa + safety")
+
 
 			if abs(safety_map.max() - safety_map.min()) < 0.01:
 				# no safe path- turn and dont move forward
@@ -339,7 +334,7 @@ class NavigationModule:
 				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
 				forward_vel = 0
 
-				if debug_img:
+				if debug_img is not None:
 					debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
 				if abs(goal_error) < 0.05: #radians
@@ -353,10 +348,9 @@ class NavigationModule:
 				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
 				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
-				if debug_img:
+				if debug_img is not None:
 					debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 
-			cls.time_tick("goalpot")
 
 			if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
 				cls.wander_until_distance = None
@@ -367,9 +361,6 @@ class NavigationModule:
 			rotational_vel = cls.MAX_ROBOT_ROT
 			forward_vel = 0
 
-
-	
-		cls.time_show()
 		
 		cls.set_velocity(forward_vel,rotational_vel, delta)
 
@@ -449,14 +440,14 @@ class NavigationModule:
 			
 			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
 
-			if debug_img:
+			if debug_img is not None:
 				# draw
 				cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
 				cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
 			dist_map = cls.forced_avoidance(dist_map)
 			
-			if debug_img:
+			if debug_img is not None:
 				if cls.avoid_left > 0:
 					debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
 				if cls.avoid_right > 0:
@@ -470,7 +461,7 @@ class NavigationModule:
 				bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
 				attractive_map[i] = 1.0 - 0.6 * abs(bearing - visout.marker_bearing)
 			
-			if debug_img:
+			if debug_img is not None:
 				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
 
 			if abs(safety_map.min() - safety_map.max()) < 0.01:
@@ -480,7 +471,7 @@ class NavigationModule:
 			else:
 				potential_map = attractive_map + safety_map
 
-				if debug_img:
+				if debug_img is not None:
 					debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
 					debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 				
