@@ -497,6 +497,9 @@ class NavigationModule:
 	@classmethod
 	def adb3_update(cls, delta, debug_img, visout):
 
+		if visout.marker_bearing is None:
+			return STATE.LOST, debug_img
+
 		goal_error = visout.marker_bearing
 		rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
 		forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)

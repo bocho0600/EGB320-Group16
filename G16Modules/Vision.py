@@ -196,9 +196,6 @@ class VisionModule:
 	@classmethod
 	def DebugPipeline(cls, DebugDraw):
 		img, imgHSV, robotview = Specific.get_image()
-		#robotview = img
-		
-		DebugDraw = True
 		
 		contoursShelf, ShelfMask = VisionModule.findShelf(imgHSV)
 		ShelfCenter = VisionModule.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "She", Draw = DebugDraw)
@@ -222,9 +219,10 @@ class VisionModule:
 				ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter) * 180 / pi
 				ObstacleDistance = VisionModule.GetDistance(ObHeight, 150)
 
-				# Add the angle and distance information to the image
-				cv2.putText(robotview, f"A: {int(ObstacleAngle)} deg", (int(x_ObstacleCenter), int(y_ObstacleCenter + ObHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-				cv2.putText(robotview, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+				if DebugDraw:
+					# Add the angle and distance information to the image
+					cv2.putText(robotview, f"A: {int(ObstacleAngle)} deg", (int(x_ObstacleCenter), int(y_ObstacleCenter + ObHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+					cv2.putText(robotview, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
 
 		
 		# Assuming contoursMarkers is a list of contours found using cv2.findContours
@@ -238,9 +236,11 @@ class VisionModule:
 				x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
 				MarkerAngle = VisionModule.GetBearing(x_MarkerCenter) * 180 / pi
 				MarkerDistance = VisionModule.GetDistance(MaHeight, 70)
-				cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-				cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
-				# You can now process each marker as needed
+
+				if DebugDraw:
+					cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+					cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
+					# You can now process each marker as needed
 		return robotview
 
 	@classmethod

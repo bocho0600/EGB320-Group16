@@ -49,7 +49,7 @@ class RealSpecific:
 	def set_velocity(fwd, rot):
 		a = 165 # multiply m/s to get PWM value 0 to 100
 		rot_ms = rot * 0.17/2 # rad/s to m/s
-		# MobilityModule.Move(-fwd*a, rot_ms*a)
+		MobilityModule.Move(-fwd*a, rot_ms*a)
 		pass
 
 	@classmethod
