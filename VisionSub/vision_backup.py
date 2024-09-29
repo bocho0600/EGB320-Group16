@@ -50,7 +50,7 @@ def main():
 
 
                   
-                  WallRGB,  WallImgGray, WallMask = vision.findWall(imgHSV,imgRGB)
+                  WallRGB,  WallImgGray, WallMask,contoursWall1 = vision.findWall(imgHSV,imgRGB)
                   ContoursMarkers, mask1 = vision.findMarkers(WallImgGray, WallMask)
                   avg_center, avg_bearing, avg_distance, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
 
