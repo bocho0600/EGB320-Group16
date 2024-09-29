@@ -196,9 +196,6 @@ class VisionModule:
 	@classmethod
 	def DebugPipeline(cls, DebugDraw):
 		img, imgHSV, robotview = Specific.get_image()
-		#robotview = img
-		
-		DebugDraw = True
 		
 		contoursShelf, ShelfMask = VisionModule.findShelf(imgHSV)
 		ShelfCenter = VisionModule.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "She", Draw = DebugDraw)
@@ -222,9 +219,10 @@ class VisionModule:
 				ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter) * 180 / pi
 				ObstacleDistance = VisionModule.GetDistance(ObHeight, 150)
 
-				# Add the angle and distance information to the image
-				cv2.putText(robotview, f"A: {int(ObstacleAngle)} deg", (int(x_ObstacleCenter), int(y_ObstacleCenter + ObHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-				cv2.putText(robotview, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+				if DebugDraw:
+					# Add the angle and distance information to the image
+					cv2.putText(robotview, f"A: {int(ObstacleAngle)} deg", (int(x_ObstacleCenter), int(y_ObstacleCenter + ObHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+					cv2.putText(robotview, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
 
 		
 		# Assuming contoursMarkers is a list of contours found using cv2.findContours
@@ -238,20 +236,22 @@ class VisionModule:
 				x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
 				MarkerAngle = VisionModule.GetBearing(x_MarkerCenter) * 180 / pi
 				MarkerDistance = VisionModule.GetDistance(MaHeight, 70)
-				cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-				cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
-				# You can now process each marker as needed
+
+				if DebugDraw:
+					cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+					cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
+					# You can now process each marker as needed
 		return robotview
 
 	@classmethod
-	def Pipeline(cls):
+	def Pipeline(cls, draw=True):
 		img, imgHSV, robotview = Specific.get_image()
 
 		
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 
 		# Get the list of detected shelves' centers and dimensions
-		detected_shelves = cls.GetContoursObject(contoursShelf, robotview, (0, 255, 255), "She", Draw=False)
+		detected_shelves = cls.GetContoursObject(contoursShelf, robotview, (0, 255, 255), "She", Draw=draw)
 
 
 		# Detect obstacles in the HSV image
@@ -259,9 +259,9 @@ class VisionModule:
 		
 		WallRGB,  WallImgGray, WallMask = cls.findWall(imgHSV,img)
 		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
-		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img, draw=False)
+		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img, draw=draw)
 
-		if aisle is not None and aisle != 0:
+		if draw and aisle is not None and aisle != 0:
 			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
 			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(avg_center[0]), int(avg_center[1])-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
@@ -330,7 +330,14 @@ class VisionModule:
 	@classmethod
 	def findWall(cls, imgHSV, imgRGB):
 		# Create masks for the orange color
+		# WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
 		WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
+		
+		# TESTED IN SIMULATOR ONLY! ALLOW PARTIAL MARKERS, MIGHT BREAK IN REAL WORLD
+		# An alternative is to use convex hull
+		# Otherwise we can try to determine which markers are full and which are partial
+		BlackMask = cv2.inRange(imgHSV, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+		WallMask =cv2.bitwise_or(WallMask, BlackMask)
 		
 		# Find contours in the mask
 		contoursWall1, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -368,6 +375,18 @@ class VisionModule:
 		ContoursMarkers, _ = cv2.findContours(mask1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 		return ContoursMarkers, mask1
 	
+	@staticmethod
+	def DebugShowIm(imgRGB, contours=None, markerpoint=None):
+		imgRGB = imgRGB.copy()
+		if contours is not None:
+			imgRGB = cv2.drawContours(imgRGB, contours, -1, (0,0,255), 2)
+		
+		if markerpoint is not None:
+			imgRGB = cv2.drawMarker(imgRGB, markerpoint, (0,255,255), cv2.MARKER_CROSS, 8, 2)
+		
+		cv2.imshow("Quick Debug", imgRGB)
+		cv2.waitKey(1)
+
 	@classmethod
 	def GetInfoMarkers(cls, robotview, ContoursMarkers, imgRGB, draw=True):
 		distance = []
@@ -382,7 +401,8 @@ class VisionModule:
 				contour_area = cv2.contourArea(contours)
 				
 				# Define the acceptable difference threshold
-				area_difference_threshold = 5000  # You can adjust this value
+				# Ignore this as we want incomplete markers (value was 5000)
+				area_difference_threshold = circle_area  # You can adjust this value
 
 				# Check if the difference between areas is within the threshold
 				if abs(contour_area - circle_area) <= area_difference_threshold:

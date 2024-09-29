@@ -5,6 +5,7 @@ import time
 
 from .Globals import *
 from .Vision import VisionModule
+# from .ItemCollection import ItemCollectionModule
 
 STATE = Enum('STATE', [
 	'LOST',
@@ -118,81 +119,83 @@ class NavigationModule:
 	@classmethod
 	def expand_safety(cls, dist_map):
 		d_theta = FOV_HORIZONTAL / SCREEN_WIDTH # angle per pixel horizontally
-
+		p_factor = SCREEN_WIDTH / FOV_HORIZONTAL
 		# left to right
 		
 		should_expand = dist_map[:, 1]
 		dist_map = dist_map[:,0].copy()
 
-		effect = []
-		for i, curr_dist in enumerate(dist_map):
-			# update points in effect. Decrease the angle and discard expired points
-			effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
-			
-			# How long would this point be effective for if we stored it
-			new_angle_left = np.arctan(cls.RADIUS/curr_dist)
 
-			# The maximum distance allowed at this point is the minimum dist of points still in effect
-			# The minimum effective point.
-			if len(effect)>0:
-				dists = [dist for dist,angle_left in effect]
-				min_dist_effect = min(dists)
-				min_dist_index = dists.index(min_dist_effect)
-			else:
+		def safety_pass(enumeration, indexf):
+			effect = []
+			for i, curr_dist in enumeration:
+				
+
+				# the points are in order of expiry to so only check the first few until we find one that isnt expired
+				found = False
+				while len(effect) > 0 and not found:
+					if effect[0][1] < i:
+						effect.pop(0)
+					else:
+						found = True
+				
+				# How long would this point be effective for if we stored it
+				new_expiry_pix = int(i + p_factor * np.arctan(cls.RADIUS/curr_dist))
+
 				# if effect is empty include this point and continue
-				dist_map[i] = curr_dist
-				if should_expand[i]:
-					effect.append((curr_dist, new_angle_left))
-				continue
+				if len(effect) == 0:
+					dist_map[indexf(i)] = curr_dist
+					if should_expand[indexf(i)]:
+						effect.append((curr_dist, new_expiry_pix))
+					continue
 
-			if curr_dist < min_dist_effect: # If this point is a new minimum, store it
-				# update the current point
-				dist_map[i] = curr_dist
-				# add the current point
-				if should_expand[i]:
-					effect.append((curr_dist, new_angle_left))
-			else: # If this point is not a new minimum then take the minimum effective dist
-				# update the current point
-				dist_map[i] = min_dist_effect
-				if new_angle_left > effect[min_dist_index][1] and should_expand[i]: # Still make this point effective if it might expire later than the current minimum effective point
+				# The maximum distance allowed at this point is the minimum dist of points still in effect
+				# The minimum effective point.
+				min_dist_effect, min_dist_expiry = effect[0]
+
+				if curr_dist < min_dist_effect: # If this point is a new minimum, store it at the beginning
+					# update the current point
+					dist_map[indexf(i)] = curr_dist
+
+
 					# add the current point
-					effect.append((curr_dist, new_angle_left))
+					if should_expand[indexf(i)]:
+						# first we need to remove any points that expire before this new one
+						found = False
+						while len(effect) > 0 and not found:
+							if effect[0][1] <= new_expiry_pix:
+								effect.pop(0)
+							else:
+								found = True
+						effect.insert(0, (curr_dist, new_expiry_pix))
+				
+				else: # If this point is not a new minimum then take the minimum effective dist
+					# update the current point
+					dist_map[indexf(i)] = min_dist_effect
 
-			
-		# right to left
-		effect = []
-		for i, curr_dist in enumerate(reversed(dist_map)):
-			# update points in effect. Decrease the angle and discard expired points
-			effect = [(dist, angle_left-d_theta) for dist,angle_left in effect if angle_left > d_theta]
-			
-			# How long would this point be effective for if we stored it
-			new_angle_left = np.arctan(cls.RADIUS/curr_dist)
+					# Still make this point effective if it might expire later than the current minimum effective point
+					if should_expand[indexf(i)] and (new_expiry_pix > min_dist_expiry):
+						# first we need to remove any points that expire before this new one
+						
+						# get j to be the index of the first point with dist >= new (curr) dist
+						j = 0
+						while j < len(effect) and effect[j][0] < curr_dist:
+							j += 1
 
-			# The maximum distance allowed at this point is the minimum dist of points still in effect
-			# The minimum effective point.
-			if len(effect)>0:
-				dists = [dist for dist,angle_left in effect]
-				min_dist_effect = min(dists)
-				min_dist_index = dists.index(min_dist_effect)
-			else:
-				# if effect is empty include this point and continue
-				dist_map[-i-1] = curr_dist
-				if should_expand[-1-i]:
-					effect.append((curr_dist, new_angle_left))
-				continue
+						found = False
+						while j < len(effect) and not found:
+							if effect[j][1] <= new_expiry_pix:
+								effect.pop(j)
+							else:
+								found = True
 
-			if curr_dist < min_dist_effect: # If this point is a new minimum, store it
-				# update the current point
-				dist_map[-1-i] = curr_dist
-				# add the current point
-				if should_expand[-1-i]:
-					effect.append((curr_dist, new_angle_left))
-			else: # If this point is not a new minimum then take the minimum effective dist
-				# update the current point
-				dist_map[-1-i] = min_dist_effect
-				if new_angle_left > effect[min_dist_index][1] and should_expand[-1-i]: # Still make this point effective if it might expire later than the current minimum effective point
-					# add the current point
-					effect.append((curr_dist, new_angle_left))
+						# add the current point
+						effect.insert(j, (curr_dist, new_expiry_pix))
+
+
+		safety_pass(enumerate(dist_map), lambda i:i)
+		safety_pass(enumerate(reversed(dist_map)), lambda i:-i-1)
+
 		return dist_map
 
 	@classmethod
@@ -249,6 +252,27 @@ class NavigationModule:
 			cls.avoid_right -= fwd * delta
 		if cls.avoid_left>0:
 			cls.avoid_left -= fwd * delta
+
+	
+	times = []
+	tnames = []
+	@classmethod
+	def time_start(cls):
+		cls.times = [time.time()]
+		cls.tnames = []
+	
+	@classmethod
+	def time_tick(cls, name):
+		cls.times.append(time.time())
+		cls.tnames.append(name)
+
+	
+	@classmethod
+	def time_show(cls):
+		for i in range(len(cls.tnames)):
+			print(f"{cls.tnames[i]}: \t{cls.times[i+1] - cls.times[i]:.4f}")
+
+
 	#endregion
 	
 	#region State Callbacks
@@ -263,11 +287,10 @@ class NavigationModule:
 	@classmethod
 	def wander_start(cls):
 		pass
-		
+
 
 	@classmethod
 	def wander_update(cls, delta, debug_img, visout):
-
 		
 		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8 and visout.aisle == cls.target_aisle:
 			cls.wander_until_distance = None
@@ -276,25 +299,30 @@ class NavigationModule:
 		points = VisionModule.combine_contour_points(visout.contours, False)
 		points = VisionModule.handle_outer_contour(points)
 		points, projected_floor = VisionModule.project_and_filter_contour(points)
-		
+
+
 		dist_map = None
 		if points is not None and points.shape[0] > 3:
-			# draw
-			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
-
+	
 			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
-
-			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+		
+			if debug_img is not None:
+				# draw
+				cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
+				cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
 			dist_map = cls.forced_avoidance(dist_map)
-			if cls.avoid_left > 0:
-				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
-			if cls.avoid_right > 0:
-				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+
+			if debug_img is not None:
+				if cls.avoid_left > 0:
+					debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
+				if cls.avoid_right > 0:
+					debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
 
 			safety_map = cls.expand_safety(dist_map)
 			
-			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+			if debug_img is not None:
+				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
 
 
 			if abs(safety_map.max() - safety_map.min()) < 0.01:
@@ -306,7 +334,8 @@ class NavigationModule:
 				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
 				forward_vel = 0
 
-				debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
+				if debug_img is not None:
+					debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
 
 				if abs(goal_error) < 0.05: #radians
 					print("Probably stuck")
@@ -319,7 +348,9 @@ class NavigationModule:
 				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
 				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
-				debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+				if debug_img is not None:
+					debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+
 
 			if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
 				cls.wander_until_distance = None
@@ -330,11 +361,9 @@ class NavigationModule:
 			rotational_vel = cls.MAX_ROBOT_ROT
 			forward_vel = 0
 
-
-	
-
 		
 		cls.set_velocity(forward_vel,rotational_vel, delta)
+
 
 		return STATE.WANDER, debug_img
 	
@@ -408,20 +437,21 @@ class NavigationModule:
 		points, projected_floor = VisionModule.project_and_filter_contour(points)
 		dist_map = None
 		if points is not None and points.shape[0] > 3:
-			# draw
-			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
-
+			
 			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
 
-			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+			if debug_img is not None:
+				# draw
+				cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
+				cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 		
-
-
 			dist_map = cls.forced_avoidance(dist_map)
-			if cls.avoid_left > 0:
-				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
-			if cls.avoid_right > 0:
-				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+			
+			if debug_img is not None:
+				if cls.avoid_left > 0:
+					debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
+				if cls.avoid_right > 0:
+					debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
 
 			safety_map = cls.expand_safety(dist_map)
 			# repulsive_map = (safety_map < 0.3)*1
@@ -431,7 +461,8 @@ class NavigationModule:
 				bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
 				attractive_map[i] = 1.0 - 0.6 * abs(bearing - visout.marker_bearing)
 			
-			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
+			if debug_img is not None:
+				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
 
 			if abs(safety_map.min() - safety_map.max()) < 0.01:
 				cls.forced_avoidance_start() #reset FA
@@ -440,8 +471,9 @@ class NavigationModule:
 			else:
 				potential_map = attractive_map + safety_map
 
-				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
-				debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+				if debug_img is not None:
+					debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+					debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 				
 
 				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
@@ -464,6 +496,9 @@ class NavigationModule:
 
 	@classmethod
 	def adb3_update(cls, delta, debug_img, visout):
+
+		if visout.marker_bearing is None:
+			return STATE.LOST, debug_img
 
 		goal_error = visout.marker_bearing
 		rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
@@ -500,17 +535,18 @@ class NavigationModule:
 
 	@classmethod
 	def collect_item_start(cls):
-		cls.set_velocity(cls.MAX_ROBOT_VEL/4,0, 0)
+		cls.set_velocity(cls.MAX_ROBOT_VEL/2,0, 0)
 		cls.collect_item_fwd_remaining = 0.06
 	
 	@classmethod
 	def collect_item_update(cls, delta, debug_img, visout):
 		if cls.collect_item_fwd_remaining > 0:
-			fwd = cls.MAX_ROBOT_VEL/4
+			fwd = cls.MAX_ROBOT_VEL/2
 			cls.set_velocity(fwd,0,delta)
 			cls.collect_item_fwd_remaining -= fwd*delta
 		else:
 			cls.set_velocity(0,0,delta)
+			# ItemCollectionModule.gripper_close(1)
 
 
 		return STATE.COLLECT_ITEM, debug_img

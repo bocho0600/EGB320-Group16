@@ -1,6 +1,14 @@
 import cv2
 import numpy as np
 import vision as vs
+
+
+import cv2
+import math
+
+import cv2
+import math
+
 import cv2
 import math
 
@@ -10,8 +18,7 @@ def is_edge_line(pt1, pt2, image_width, image_height):
     x2, y2 = pt2
 
     # If either point lies on the image boundary (edges), consider it an edge line
-    if (x1 == 0 or x1 == image_width or y1 == 0 or y1 == image_height and
-        x2 == 0 or x2 == image_width or y2 == 0 or y2 == image_height):
+    if (x1 == 0 or x1 == image_width-1 or y1 == 0 or y1 == image_height-1) and (x2 == 0 or x2 == image_width-1 or y2 == 0 or y2 == image_height-1):
         return True
     return False
 
@@ -105,13 +112,13 @@ def get_mutual_point(line1, line2):
 
 def main():
     # Path to the image file
-      image_path = '/home/po/EGB320-Group16/VisionSub/videos/img.jpg'  # Replace with the path to your image
+      image_path = 'VisionSub/videos/img.jpg'  # Replace with the path to your image
       
       # Load the image
       image = cv2.imread(image_path)
       print(image.shape)
       image = image[700:2048, 0:2731]
-      image = cv2.flip(image, 1)
+      #image = cv2.flip(image, 1)
       if image is None:
             print(f"Error: Could not load image from {image_path}")
             return

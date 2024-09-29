@@ -19,8 +19,10 @@ def down(seconds):
 def stop():
     p.ChangeDutyCycle(7)
 
-#about 3.5 sec down for every 6 sec up
 
-down(2)
-#up(7.5)
-stop()
+if __name__ == "__main__":
+    #about 3.5 sec down for every 6 sec up
+
+    down(2)
+    #up(7.5)
+    stop()
