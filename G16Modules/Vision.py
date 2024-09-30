@@ -18,7 +18,7 @@ class VisionOutput:
 
 class VisionModule:
 	color_ranges = {
-		'wall': (np.array([34, 0, 211]), np.array([45, 74, 255])),
+		'wall': (np.array([24, 25, 175]), np.array([39, 105, 255])),
 		'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
 		'yellow': (np.array([29, 177, 244]), np.array([30, 251, 255])),
 		'blue': (np.array([81, 0, 0]), np.array([116, 255, 255])),
@@ -257,7 +257,7 @@ class VisionModule:
 		# Detect obstacles in the HSV image
 		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
 		
-		WallRGB,  WallImgGray, WallMask = cls.findWall(imgHSV,img)
+		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
 		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img, draw=draw)
 
@@ -329,15 +329,8 @@ class VisionModule:
 	
 	@classmethod
 	def findWall(cls, imgHSV, imgRGB):
-		# Create masks for the orange color
-		# WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
+		# Create masks for the orange color (wall detection)
 		WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
-		
-		# TESTED IN SIMULATOR ONLY! ALLOW PARTIAL MARKERS, MIGHT BREAK IN REAL WORLD
-		# An alternative is to use convex hull
-		# Otherwise we can try to determine which markers are full and which are partial
-		BlackMask = cv2.inRange(imgHSV, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
-		WallMask =cv2.bitwise_or(WallMask, BlackMask)
 		
 		# Find contours in the mask
 		contoursWall1, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -347,9 +340,12 @@ class VisionModule:
 			# Find the largest contour
 			largest_contour = max(contoursWall1, key=cv2.contourArea)
 			
-			# Create an empty mask and draw the largest contour on it
+			# Calculate the convex hull of the largest contour
+			hull = cv2.convexHull(largest_contour)
+			
+			# Create an empty mask and draw the convex hull on it
 			filledWallMask = np.zeros_like(WallMask)
-			cv2.drawContours(filledWallMask, [largest_contour], -1, (255), thickness=cv2.FILLED)
+			cv2.drawContours(filledWallMask, [hull], -1, (255), thickness=cv2.FILLED)
 			
 			# Apply Gaussian blur to the filled mask
 			filledWallMask = cv2.GaussianBlur(filledWallMask, (9, 9), 2)
@@ -364,8 +360,8 @@ class VisionModule:
 			WallImg = np.zeros_like(imgRGB)
 			WallImgGray = np.zeros_like(cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY))
 			filledWallMask = np.zeros_like(WallMask)
-		
-		return WallImg, WallImgGray, filledWallMask
+
+		return WallImg, WallImgGray, filledWallMask, contoursWall1
 
 	@classmethod
 	def findMarkers(cls, WallImgGray, WallMask):
@@ -402,7 +398,7 @@ class VisionModule:
 				
 				# Define the acceptable difference threshold
 				# Ignore this as we want incomplete markers (value was 5000)
-				area_difference_threshold = circle_area  # You can adjust this value
+				area_difference_threshold = circle_area*0.5  # You can adjust this value
 
 				# Check if the difference between areas is within the threshold
 				if abs(contour_area - circle_area) <= area_difference_threshold:
