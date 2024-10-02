@@ -42,6 +42,14 @@ def main():
 
 
 
+                  contoursLoadingBay, LoadingBayMask = vision.findLoadingArea(imgHSV)
+                  LoadingBayCenters = vision.GetContoursShelf(contoursLoadingBay, RobotView, (0, 255, 0), "L", Draw=True)
+                  LoadingBayCenter, LoadingBayBearing = vision.GetInfoShelf(RobotView, LoadingBayCenters, imgRGB)
+
+
+
+
+
                   # Detect obstacles in the HSV image
                   contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
                   # Get the list of detected obstacles' centers and dimensions
@@ -55,7 +63,7 @@ def main():
                   avg_center, avg_bearing, avg_distance, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
 
 
-                  cam.DisplayFrame(frame_id, FPS=True, frame=RobotView) # Display the frame with the detected objects.
+                  cam.DisplayFrame(frame_id, FPS=True, frame=RobotView, frame1 = WallMask) # Display the frame with the detected objects.
                   # Break the loop if 'q' is pressed
                   if cv2.waitKey(1) & 0xFF == ord('q'):
                         break
