@@ -194,89 +194,63 @@ class VisionModule:
 
 
 	@classmethod
-	def DebugPipeline(cls, DebugDraw):
-		img, imgHSV, robotview = Specific.get_image()
-		
-		contoursShelf, ShelfMask = VisionModule.findShelf(imgHSV)
-		ShelfCenter = VisionModule.GetContoursShelf(contoursShelf, robotview, (0, 0, 255), "She", Draw = DebugDraw)
-		if ShelfCenter != None:
-			ShelfAngle = VisionModule.GetBearing(ShelfCenter[1]) * 180 / pi
-			cv2.putText(robotview, f"Angle: {int(ShelfAngle)} cm", (int(ShelfCenter[0]), int(ShelfCenter[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 2)
-		
-		# Detect obstacles in the HSV image
-		contoursObstacle, ObstacleMask = VisionModule.findObstacle(imgHSV)
-
-		# Get the list of detected obstacles' centers and dimensions
-		detected_obstacles = VisionModule.GetContoursObject(contoursObstacle, robotview, (0, 255, 255), "Obs", Draw=DebugDraw)
-
-		# Check if any obstacles were detected
-		if detected_obstacles is not None:
-		# Loop through each detected obstacle and process it
-			for obstacle in detected_obstacles:
-				x_ObstacleCenter, y_ObstacleCenter, ObHeight, ObWidth = obstacle
-				
-				# Calculate the obstacle's angle and distance
-				ObstacleAngle = VisionModule.GetBearing(x_ObstacleCenter) * 180 / pi
-				ObstacleDistance = VisionModule.GetDistance(ObHeight, 150)
-
-				if DebugDraw:
-					# Add the angle and distance information to the image
-					cv2.putText(robotview, f"A: {int(ObstacleAngle)} deg", (int(x_ObstacleCenter), int(y_ObstacleCenter + ObHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-					cv2.putText(robotview, f"D: {int(ObstacleDistance)} cm", (int(x_ObstacleCenter), int(y_ObstacleCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
-
-		
-		# Assuming contoursMarkers is a list of contours found using cv2.findContours
-		contoursMarkers, MarkerMask = VisionModule.findMarkers(imgHSV)
-
-		# Get the list of detected markers' center and dimensions
-		detected_markers = VisionModule.GetContoursObject(contoursMarkers, robotview, (0, 255, 255), "Circ", Draw=DebugDraw)
-
-		if detected_markers is not None:
-			for marker in detected_markers:
-				x_MarkerCenter, y_MarkerCenter, MaHeight, MaWidth = marker
-				MarkerAngle = VisionModule.GetBearing(x_MarkerCenter) * 180 / pi
-				MarkerDistance = VisionModule.GetDistance(MaHeight, 70)
-
-				if DebugDraw:
-					cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x_MarkerCenter), int(y_MarkerCenter + MaHeight / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-					cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x_MarkerCenter), int(y_MarkerCenter)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100),1)
-					# You can now process each marker as needed
-		return robotview
-
-	@classmethod
-	def Pipeline(cls, draw=True):
+	def DebugPipeline(cls, draw=True):
+		# Put pipeline for testing vision code.
 		img, imgHSV, robotview = Specific.get_image()
 
-		
+		# Detect shelves in the HSV image
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
-
-		# Get the list of detected shelves' centers and dimensions
-		detected_shelves = cls.GetContoursObject(contoursShelf, robotview, (0, 255, 255), "She", Draw=draw)
-
 
 		# Detect obstacles in the HSV image
 		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
 		
+		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
 		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img, draw=draw)
 
+		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
+		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
+		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
+		
+		# Draw optionally
 		if draw and aisle is not None and aisle != 0:
 			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
 			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(avg_center[0]), int(avg_center[1])-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
-
-		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
-
-		# sort the remaining ones by their area
-		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
 		
-		
-		
-		return robotview, VisionOutput(aisle=aisle, marker_distance=marker_distance, marker_bearing=marker_bearing, contours=contours, detected_shelves=detected_shelves)
-
+		return robotview
 
 	@classmethod
+	def Pipeline(cls, draw=True):
+		# Pipeline for use with navigation
+		img, imgHSV, robotview = Specific.get_image()
+
+		# Detect shelves in the HSV image
+		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
+
+		# Detect obstacles in the HSV image
+		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
+		
+		# Detect wall and marker within
+		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
+		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
+		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, img, draw=draw)
+
+		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
+		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
+		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
+		
+		# Draw optionally
+		if draw and aisle is not None and aisle != 0:
+			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
+			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(avg_center[0]), int(avg_center[1])-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
+		
+		return robotview, VisionOutput(aisle=aisle, marker_distance=marker_distance, marker_bearing=marker_bearing, contours=contours)
+
+
+	@classmethod # Includes code to measure FPS and draw it onto the image frame
 	def ExportImage(cls, WindowName, view, FPS=False):
 		if FPS:
 			fps = 1.0 / (time.time() - cls.t1)  # calculate frame rate
@@ -284,6 +258,19 @@ class VisionModule:
 			cv2.putText(view, f'{int(fps)}', (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 100), 2)  # Display the FPS on the screen
 		
 		cv2.imshow(WindowName, view)
+
+	@staticmethod # Mainly for use while break'd in debug console
+	def DebugShowIm(imgRGB, contours=None, markerpoint=None):
+		imgRGB = imgRGB.copy()
+		if contours is not None:
+			imgRGB = cv2.drawContours(imgRGB, contours, -1, (0,0,255), 2)
+		
+		if markerpoint is not None:
+			imgRGB = cv2.drawMarker(imgRGB, markerpoint, (0,255,255), cv2.MARKER_CROSS, 8, 2)
+		
+		cv2.imshow("Quick Debug", imgRGB)
+		cv2.waitKey(1)
+
 
 	@classmethod
 	def findBlack(cls, imgHSV):
@@ -363,7 +350,7 @@ class VisionModule:
 
 		return WallImg, WallImgGray, filledWallMask, contoursWall1
 
-	@classmethod
+	@classmethod # Returns markers contours inside wall. Need to call findWall first
 	def findMarkers(cls, WallImgGray, WallMask):
 		_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
 		markers = cv2.bitwise_and(WallMask, mask)
@@ -371,19 +358,7 @@ class VisionModule:
 		ContoursMarkers, _ = cv2.findContours(mask1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 		return ContoursMarkers, mask1
 	
-	@staticmethod
-	def DebugShowIm(imgRGB, contours=None, markerpoint=None):
-		imgRGB = imgRGB.copy()
-		if contours is not None:
-			imgRGB = cv2.drawContours(imgRGB, contours, -1, (0,0,255), 2)
-		
-		if markerpoint is not None:
-			imgRGB = cv2.drawMarker(imgRGB, markerpoint, (0,255,255), cv2.MARKER_CROSS, 8, 2)
-		
-		cv2.imshow("Quick Debug", imgRGB)
-		cv2.waitKey(1)
-
-	@classmethod
+	@classmethod # Input: marker contours, Output: marker avg center, bearing, distance, count (aisle number). Would be nice to tell if any markers are blocked
 	def GetInfoMarkers(cls, robotview, ContoursMarkers, imgRGB, draw=True):
 		distance = []
 		bearing = []
@@ -443,8 +418,8 @@ class VisionModule:
 		return avg_center, avg_bearing, avg_distance, shape_count
 
 	
-	@classmethod
-	def GetContoursShelf(cls, contours, output, colour, text, Draw=True):
+	@classmethod # Formerly GetContoursShelf. Input: Shelf contours. Output: shelf center (not distance/bearing)
+	def ProcessContoursShelf(cls, contours, output, colour, text, Draw=True):
 		detected = False
 		center = (0, 0)
 		radius = 0
@@ -473,8 +448,8 @@ class VisionModule:
 		else:
 			return None
 		
-	@classmethod
-	def GetContoursObject(cls, contours, output, colour, text, Draw=True):
+	@classmethod # Formerly GetContoursObject. Input contours. Output: center, width and height
+	def ProcessContoursObject(cls, contours, output, colour, text, Draw=True):
 		detected_objects = []  # List to store detected object info
 		
 		for contour in contours:

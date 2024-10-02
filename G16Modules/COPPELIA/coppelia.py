@@ -17,7 +17,7 @@ try:
     elif platform.system() == 'Darwin':
         file_extension = '.dylib'
     else:
-        file_extension = '_Pi.so'
+        file_extension = '_myPi.so'
     libfullpath = os.path.join(os.path.dirname(__file__), 'remoteApi' + file_extension)
     libsimx = ct.CDLL(libfullpath)
 except:

@@ -24,13 +24,13 @@ def main(): # Main function
 		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction) # Temp start = wander for debugging. normally it should be find_aisle_from_outside 
 		t1 = time.time()
 
-		pipeline = 'nav'
+		pipeline = 'debug'
 		draw = True
 
 		while True:
 		
 			if pipeline == 'debug':
-				# Run vision and most CPU-intensive hav code but don't move
+				# Run vision and most CPU-intensive nav code but don't move
 				# robotview = VisionModule.DebugPipeline(draw)
 
 				robotview, visout = VisionModule.Pipeline(False)
