@@ -29,9 +29,8 @@ def main(): # Main function
 
 		while True:
 		
-			if pipeline == 'debug':
+			if pipeline == 'debug_distmap':
 				# Run vision and most CPU-intensive nav code but don't move
-				# robotview = VisionModule.DebugPipeline(draw)
 
 				robotview, visout = VisionModule.Pipeline(False)
 				points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
@@ -54,8 +53,17 @@ def main(): # Main function
 					t2 = time.time()
 					print(f"FPS: {1.0/(t2-t1):.1f}")
 					t1 = t2
+			elif pipeline == 'debug':
+				# Run vision and most CPU-intensive nav code but don't move
+				robotview = VisionModule.DebugPipeline(draw)
 
-			else:
+				if draw:
+					VisionModule.ExportImage("RobotView", robotview, FPS = True)
+				else:
+					t2 = time.time()
+					print(f"FPS: {1.0/(t2-t1):.1f}")
+					t1 = t2
+			elif pipeline == 'nav':
 				# Full navigation move to the desired shelf
 				robotview, visout = VisionModule.Pipeline(False)
 				# print(marker_distance, marker_bearing)

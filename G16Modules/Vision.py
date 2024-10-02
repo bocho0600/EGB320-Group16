@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from math import cos,sin, pi
+from math import cos,sin,pi,atan2,degrees
 import time
 from threading import Thread, Lock, Condition
 
@@ -192,7 +192,7 @@ class VisionModule:
 	t1 = time.time()
 	fps = 0
 
-
+	#region Pipelines
 	@classmethod
 	def DebugPipeline(cls, draw=True):
 		# Put pipeline for testing vision code.
@@ -212,12 +212,8 @@ class VisionModule:
 		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
 		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
 		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
-		
-		# Draw optionally
-		if draw and aisle is not None and aisle != 0:
-			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
-			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(avg_center[0]), int(avg_center[1])-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
+		ShelfCorners = cls.ProcessShelfCorners(contoursShelf, robotview, draw=draw)
 		
 		return robotview
 
@@ -241,13 +237,15 @@ class VisionModule:
 		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
 		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
 		
-		# Draw optionally
-		if draw and aisle is not None and aisle != 0:
-			cv2.drawMarker(robotview, (int(avg_center[0]), int(avg_center[1])), (255, 255, 0), cv2.MARKER_SQUARE, 12, 3)
-			cv2.putText(robotview, f"{marker_distance:.1f} cm", (int(avg_center[0]), int(avg_center[1])-15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-
 		
 		return robotview, VisionOutput(aisle=aisle, marker_distance=marker_distance, marker_bearing=marker_bearing, contours=contours)
+	#endregion
+
+	# @staticmethod
+	# def PrintPixel(event, x, y, flags, param):
+	# 	if flags & 1:
+	# 		pixel = param[y, x, :]
+	# 		print(pixel)
 
 
 	@classmethod # Includes code to measure FPS and draw it onto the image frame
@@ -257,7 +255,9 @@ class VisionModule:
 			cls.t1 = time.time()
 			cv2.putText(view, f'{int(fps)}', (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 100), 2)  # Display the FPS on the screen
 		
+		
 		cv2.imshow(WindowName, view)
+		#cv2.setMouseCallback(WindowName, cls.PrintPixel, view)
 
 	@staticmethod # Mainly for use while break'd in debug console
 	def DebugShowIm(imgRGB, contours=None, markerpoint=None):
@@ -324,15 +324,19 @@ class VisionModule:
 		
 		# Check if any contours are found
 		if contoursWall1:
-			# Find the largest contour
-			largest_contour = max(contoursWall1, key=cv2.contourArea)
-			
-			# Calculate the convex hull of the largest contour
-			hull = cv2.convexHull(largest_contour)
-			
+			contoursWall1 = sorted(contoursWall1, key=cv2.contourArea, reverse=True)
+
 			# Create an empty mask and draw the convex hull on it
 			filledWallMask = np.zeros_like(WallMask)
-			cv2.drawContours(filledWallMask, [hull], -1, (255), thickness=cv2.FILLED)
+
+			
+			# Find the 2 largest contours
+			for largest_contour in contoursWall1[:2]:
+				if cv2.contourArea(largest_contour) > 400: # some threshold
+					# Calculate the convex hull of the largest contour
+					hull = cv2.convexHull(largest_contour)
+					
+					cv2.drawContours(filledWallMask, [hull], -1, (255), thickness=cv2.FILLED)
 			
 			# Apply Gaussian blur to the filled mask
 			filledWallMask = cv2.GaussianBlur(filledWallMask, (9, 9), 2)
@@ -372,22 +376,19 @@ class VisionModule:
 				contour_area = cv2.contourArea(contours)
 				
 				# Define the acceptable difference threshold
-				# Ignore this as we want incomplete markers (value was 5000)
+				# We need to see += half of the expected circle
+				# (we will not see more than expected because of minEnclosingCircle - the circle will just be bigger)
 				area_difference_threshold = circle_area*0.5  # You can adjust this value
 
 				# Check if the difference between areas is within the threshold
 				if abs(contour_area - circle_area) <= area_difference_threshold:
 					MarkerAngle = cls.GetBearing(x)
 					MarkerDistance = cls.GetDistance(radius * 2, 70)
-					if draw:
-						# cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), 
-						#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-						# cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x), int(y)), 
-						#             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
-						cv2.circle(robotview, center, int(radius), (255, 255), 2)
-						cv2.drawMarker(robotview, center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
-						cv2.putText(robotview, f"M", (int(x - 6), int(y + radius / 2)), 
-									cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
+					# if draw:
+					# 	cv2.circle(robotview, center, int(radius), (255, 255), 2)
+					# 	cv2.drawMarker(robotview, center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
+					# 	cv2.putText(robotview, f"M", (int(x - 6), int(y + radius / 2)), 
+					# 				cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
 					
 					# Store the distance, bearing, and center
 					distance.append(MarkerDistance)
@@ -402,13 +403,15 @@ class VisionModule:
 			avg_distance = sum(distance) / len(distance)
 			avg_bearing = sum(bearing) / len(bearing)
 			shape_count = len(centers)
-			cv2.drawMarker(robotview, avg_center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
-			cv2.putText(robotview, f"A: {int(avg_bearing)} deg", (int(avg_x), int(avg_y + 20)), 
-						cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-			cv2.putText(robotview, f"D: {int(avg_distance)} cm", (int(avg_x), int(avg_y)),
-						cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
-			cv2.putText(robotview, f"{shape_count}", (int(avg_x - 10), int(avg_y)),
-						cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+			if draw:
+				cv2.drawMarker(robotview, avg_center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
+				cv2.putText(robotview, f"A: {int(degrees(avg_bearing))} deg", (int(avg_x), int(avg_y + 20)), 
+							cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+				cv2.putText(robotview, f"D: {int(avg_distance)} cm", (int(avg_x), int(avg_y)),
+							cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+				cv2.putText(robotview, f"{shape_count}", (int(avg_x - 10), int(avg_y)),
+							cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 100), 2)
 		else:
 			avg_center = None  # If no centers were found, return None or a default value
 			avg_bearing = None
@@ -472,8 +475,128 @@ class VisionModule:
 		else:
 			return None
 
+	#region Experimental
+	@staticmethod
+	def is_edge_line(pt1, pt2, image_width, image_height):
+		"""Check if the line touches the edges of the frame."""
+		x1, y1 = pt1
+		x2, y2 = pt2
+
+		# If both points lie on the image boundary (edges), consider it an edge line
+		if (x1 == 0 or x1 == image_width-1 or y1 == 0 or y1 == image_height-1) and (x2 == 0 or x2 == image_width-1 or y2 == 0 or y2 == image_height-1):
+			return True
+		return False
+
+
+	@staticmethod
+	def get_line_angle_degrees(vec):
+		# Calculate the angle of the line relative to the horizontal
+		dx, dy = vec #Take the coordinates of the vector
+		angle_radians = atan2(dy, dx) # Calculate the angle in radians
+		angle_degrees = degrees(angle_radians) # Convert to degrees
+		return angle_degrees
+
+
+	@classmethod
+	def ProcessShelfCorners(cls, contours, robotview, draw=True):
+		lines = []  # To store the lines and their lengths
+		image_height, image_width = robotview.shape[:2]  # Get image dimensions
+
+		corners = []
+
+		for contour in contours:
+			epsilon = 5#0.01 * cv2.arcLength(contour, True)
+			approx = cv2.approxPolyDP(contour, epsilon, True)
+
+			# Only consider contours with at least 4 points
+			if len(approx) >= 4:
+				# Collect line segments and their lengths
+				for i in range(len(approx)):
+					pt0 = approx[(i - 1 + len(approx)) % len(approx)][0]
+					pt1 = approx[i][0] # Point1 of the line
+					pt2 = approx[(i + 1) % len(approx)][0]  # Wrap around to the first point
+
+					# Use pt1 as the "origin" for these vectors
+					v10 = pt0 - pt1
+					v12 = pt2 - pt1
+					
+					# Get signed angle of each and check if they are vertical
+					ang1 = cls.get_line_angle_degrees(v10)
+					ang2 = cls.get_line_angle_degrees(v12)
+					theta = abs(ang2-ang1)
+					vert1 = abs(ang1) > 70 and abs(ang1) < 110
+					vert2 = abs(ang2) > 70 and abs(ang2) < 110
+
+					# Discard if line2 is pointing too far to the left or line1 is pointing too far to the right 
+					# This would mean we're on the 'top' of the contour
+					if abs(ang2) > 105 or abs(ang1) < 75:
+						continue
+					
+					# Only Eliminate points that touch the edges of the image
+					if cls.is_edge_line(pt1, pt1, image_width, image_height):
+						continue  # Skip this point if it touches the edge
+
+					
+					
+					# Append (pt1, pt2, length) to the list
+					lines.append((pt1, pt2))
+					if draw:
+						cv2.line(robotview, pt0, pt1, (0, 255, 0) if vert1 else (255, 0, 0), 2)
+						cv2.line(robotview, pt1, pt2, (0, 255, 0) if vert2 else (255, 0, 0), 2)
+
+					
+					corner_type = ''
+
+					# Discard corner if both are vertical
+					if vert1 and vert2:
+						continue
+
+					if (not vert1) and (not vert2):
+						# Both horizontal
+						
+						# At least one line should extend upwards (-y) from the point
+						if ang1 > 0 and ang2 > 0:
+							continue
+
+						corner_type = 'Facing'
+					else:
+						# One Horizontal and one vertical
+						if vert1:
+							# Horizontal Line must extend downwards
+							if ang2 < 0:
+								continue
+							
+							# Classify using the vertical line dir
+							if ang1 > 0 :
+								corner_type = 'Fake'
+							else:
+								corner_type = 'Away'
+						
+						elif vert2:
+							# Horizontal Line must extend downwards
+							if ang1 < 0:
+								continue
+
+							# Classify using the vertical line dir
+							if ang2 > 0 :
+								corner_type = 'Fake'
+							else:
+								corner_type = 'Away'
+
+					corners.append((pt1, corner_type))
+
+		if draw:
+			for point, corner_type in corners:
+				if corner_type == 'Facing':
+					cv2.circle(robotview, point, 5, (255, 255, 255), -1)  # Draw white circle for facing corners
+				elif corner_type == 'Fake':
+					cv2.circle(robotview, point, 5, (127, 127, 127), -1)  # Draw grey circle for fake corners
+				elif corner_type == 'Away':
+					cv2.circle(robotview, point, 5, (0, 0, 0), -1)  # Draw black circle for away corners
+
+		return robotview
+	#endregion
 	
-  
 	@classmethod
 	def GetDistance(cls, width, real_width):
 		return (cls.focal_length * real_width) / width + 4

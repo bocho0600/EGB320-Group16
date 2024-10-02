@@ -67,8 +67,6 @@ class SimSpecific:
     @classmethod
     def update(cls):
         cls.packerBotSim.UpdateObjectPositions() # needs to be called once at the end of the main code loop
-        if is_hitl:
-            time.sleep(1.0)
 
     @classmethod
     def end(cls):
