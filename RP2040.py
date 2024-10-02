@@ -5,6 +5,15 @@ class I2C:
     def __init__(self, bus_number=1, addr=0x08):
         self.addr = addr  # I2C address of the Arduino slave
         self.bus = SMBus(bus_number)  # I2C bus (1 for Raspberry Pi, might be different for other devices)
+        TRUE_SPEED_MAX = 100
+        SET_SPEED_MAX = 255
+        self.prev_forward_speed = 0
+        self.prev_rotational_speed = 0
+
+    def convert_100_to_255_range(self,value):
+        return round((value / TRUE_SPEED_MAX) * SET_SPEED_MAX)
+
+
 
     def string_to_ascii_array(self, input_string):  # Function to convert a string to an array of ASCII values to load to I2C bus
         ascii_values = [ord(char) for char in input_string]  # List comprehension for conversion
@@ -53,6 +62,7 @@ class I2C:
         except Exception as e:
             print(f"Error sending servo command: {e}")
     
+
     def DCWrite(self, number, direction, speed):
         # Validate inputs
         if number not in range(1, 3): # DC motor numbers start from 1 to 2
@@ -72,7 +82,43 @@ class I2C:
             self.bus.write_i2c_block_data(self.addr, 0, ascii_array)
         except Exception as e:
             print(f"Error sending servo command: {e}")
+    
 
+
+    def MoveForward(self, speed):  # Speed is between 0 and 100
+        converted_forward_speed = self.convert_100_to_255_range(speed)  # Convert to 0-255 for I2C function
+        if converted_forward_speed > 0:  # Move forward 
+            self.DCWrite(1, "0", converted_forward_speed)
+            self.DCWrite(2, "0", converted_forward_speed)
+        elif converted_forward_speed < 0:
+            self.DCWrite(1, "1", -converted_forward_speed)  # Use the negative value for reverse
+            self.DCWrite(2, "1", -converted_forward_speed)
+
+        elif converted_forward_speed == 0:  # If the speed is 0, stop the motor
+            self.DCWrite(1, "S", 0)
+            self.DCWrite(2, "S", 0)
+
+    def Rotate(self, speed):  # Speed is between 0 and 100
+        converted_rotational_speed = self.convert_100_to_255_range(speed)  # Convert to 0-255 for I2C function
+        if converted_rotational_speed > 0:
+            self.DCWrite(1, "0", converted_rotational_speed)
+            self.DCWrite(2, "1", converted_rotational_speed)
+        elif converted_rotational_speed < 0:
+            self.DCWrite(1, "1", -converted_rotational_speed)  # Use the negative value for reverse
+            self.DCWrite(2, "0", -converted_rotational_speed)
+
+    def movement(self, forward_speed, rotational_speed):
+        if self.prev_forward_speed != forward_speed:  # If the speed is different from the remembered speed
+            self.MoveForward(forward_speed)
+            self.prev_forward_speed = forward_speed
+        if self.prev_rotational_speed != rotational_speed:  # If the speed is different from the remembered speed 
+            self.Rotate(rotational_speed)
+            self.prev_rotational_speed = rotational_speed
+
+        
+            
+
+        
 
 
 
