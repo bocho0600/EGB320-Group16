@@ -225,6 +225,8 @@ class VisionModule:
 		# Detect shelves in the HSV image
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 
+		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
+
 		# Detect obstacles in the HSV image
 		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
 		
@@ -238,7 +240,7 @@ class VisionModule:
 		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
 		
 		
-		return robotview, VisionOutput(aisle=aisle, marker_distance=marker_distance, marker_bearing=marker_bearing, contours=contours)
+		return robotview, VisionOutput(aisle=aisle, marker_distance=marker_distance, marker_bearing=marker_bearing, contours=contours, detected_shelves=detected_shelves)
 	#endregion
 
 	# @staticmethod
@@ -541,8 +543,8 @@ class VisionModule:
 					# Append (pt1, pt2, length) to the list
 					lines.append((pt1, pt2))
 					if draw:
-						cv2.line(robotview, pt0, pt1, (0, 255, 0) if vert1 else (255, 0, 0), 2)
-						cv2.line(robotview, pt1, pt2, (0, 255, 0) if vert2 else (255, 0, 0), 2)
+						cv2.line(robotview, tuple(pt0), tuple(pt1), (0, 255, 0) if vert1 else (255, 0, 0), 2)
+						cv2.line(robotview, tuple(pt1), tuple(pt2), (0, 255, 0) if vert2 else (255, 0, 0), 2)
 
 					
 					corner_type = ''
@@ -588,11 +590,11 @@ class VisionModule:
 		if draw:
 			for point, corner_type in corners:
 				if corner_type == 'Facing':
-					cv2.circle(robotview, point, 5, (255, 255, 255), -1)  # Draw white circle for facing corners
+					cv2.circle(robotview, tuple(point), 5, (255, 255, 255), -1)  # Draw white circle for facing corners
 				elif corner_type == 'Fake':
-					cv2.circle(robotview, point, 5, (127, 127, 127), -1)  # Draw grey circle for fake corners
+					cv2.circle(robotview, tuple(point), 5, (127, 127, 127), -1)  # Draw grey circle for fake corners
 				elif corner_type == 'Away':
-					cv2.circle(robotview, point, 5, (0, 0, 0), -1)  # Draw black circle for away corners
+					cv2.circle(robotview, tuple(point), 5, (0, 0, 0), -1)  # Draw black circle for away corners
 
 		return robotview
 	#endregion

@@ -37,10 +37,10 @@ class NavigationModule:
 
 
 	
-	MAX_ROBOT_VEL = 0.13 # m/s
+	MAX_ROBOT_VEL = 0.20 # m/s
 	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
-	MAX_ROBOT_ROT = pi/6 # rad/s
+	MAX_ROBOT_ROT = pi/5 # rad/s
 	RADIUS = 0.15 # how far to stay away from wall
 
 	@classmethod
@@ -353,6 +353,7 @@ class NavigationModule:
 
 
 			if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
+				print(f"We wandered until {dist_map[:, 0].max()} < {cls.wander_until_distance}")
 				cls.wander_until_distance = None
 				return cls.next_state, debug_img
 				
@@ -395,13 +396,13 @@ class NavigationModule:
 			else:
 				# Wander until we are that far from furthest point
 				cls.fafo_react_marker = True # When we get back to fafo then we should find the marker
-				cls.wander_until_distance = 1.3 # "metres"
+				cls.wander_until_distance = 1.03 # "metres"
 				cls.next_state = STATE.FIND_AISLE_FROM_OUTSIDE
 				return STATE.WANDER, debug_img
 				
 		elif cls.target_aisle == 3:
 			if visout.aisle is None or visout.aisle < 1:
-				cls.set_velocity(0, -0.6 * cls.MAX_ROBOT_ROT, delta)
+				cls.set_velocity(0, -cls.MAX_ROBOT_ROT, delta)
 			else:
 				return STATE.AISLE_DOWN, debug_img
 		else:

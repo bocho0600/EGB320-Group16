@@ -24,7 +24,7 @@ def main(): # Main function
 		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction) # Temp start = wander for debugging. normally it should be find_aisle_from_outside 
 		t1 = time.time()
 
-		pipeline = 'debug'
+		pipeline = 'nav'
 		draw = True
 
 		while True:

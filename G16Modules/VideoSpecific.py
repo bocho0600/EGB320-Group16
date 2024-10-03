@@ -1,7 +1,6 @@
 from .Globals import *
-from .COPPELIA.warehousebot_lib import *
 import cv2
-
+import time
 class VideoSpecific:
 
     # Specific should implement:
@@ -11,7 +10,7 @@ class VideoSpecific:
 	# update
 	# stop
 
-    video_path = 'VisionSub/videos/test_video.mp4'
+    video_path = 'VisionSub/videos/rec2.h264'
 
     @classmethod
     def get_image(cls):
