@@ -2,8 +2,6 @@ from __future__ import print_function
 import sys
 import os
 
-
-
 import time
 from .RP2040 import I2C
 

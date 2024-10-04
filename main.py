@@ -87,6 +87,7 @@ def main(): # Main function
 				break
 
 	finally:
+		NavigationModule.end()
 		Specific.end()
 
 if __name__ == "__main__": # Run the main function

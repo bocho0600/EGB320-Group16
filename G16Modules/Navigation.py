@@ -6,6 +6,7 @@ import time
 from .Globals import *
 from .Vision import VisionModule
 # from .ItemCollection import ItemCollectionModule
+from .PathProcess import PathProcess
 
 STATE = Enum('STATE', [
 	'LOST',
@@ -37,10 +38,10 @@ class NavigationModule:
 
 
 	
-	MAX_ROBOT_VEL = 0.20 # m/s
+	MAX_ROBOT_VEL = 0.13 # m/s
 	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
-	MAX_ROBOT_ROT = pi/5 # rad/s
+	MAX_ROBOT_ROT = pi/6 # rad/s
 	RADIUS = 0.15 # how far to stay away from wall
 
 	@classmethod
@@ -48,7 +49,8 @@ class NavigationModule:
 		cls.forced_avoidance_timer_update(fwd, delta)
 		cls.last_fwd = fwd
 		cls.last_rot = rot
-		Specific.set_velocity(fwd, rot)
+		# Specific.set_velocity(fwd, rot)
+		PathProcess.set_velocity(fwd, rot)
 
 
 	#region state machine
@@ -84,7 +86,12 @@ class NavigationModule:
 		cls.t_now = time.time()
 		cls.call_current_start()
 		cls.forced_avoidance_start()
+
+		PathProcess.Start()
 	
+	@classmethod
+	def end(cls):
+		PathProcess.End()
 	
 
 	# Call the start function for the current state
@@ -396,7 +403,7 @@ class NavigationModule:
 			else:
 				# Wander until we are that far from furthest point
 				cls.fafo_react_marker = True # When we get back to fafo then we should find the marker
-				cls.wander_until_distance = 1.03 # "metres"
+				cls.wander_until_distance = 1.3 # "metres"
 				cls.next_state = STATE.FIND_AISLE_FROM_OUTSIDE
 				return STATE.WANDER, debug_img
 				
@@ -498,12 +505,14 @@ class NavigationModule:
 	@classmethod
 	def adb3_update(cls, delta, debug_img, visout):
 
-		if visout.marker_bearing is None:
-			return STATE.LOST, debug_img
-
-		goal_error = visout.marker_bearing
-		rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
-		forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+		if visout.marker_bearing is not None:
+			goal_error = visout.marker_bearing
+			rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
+			forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+		else:
+			forward_vel = cls.MAX_ROBOT_VEL
+			rotational_vel = 0
+		
 		cls.set_velocity(forward_vel, rotational_vel, delta)
 
 		cls.adb3_remaining -= forward_vel*delta
