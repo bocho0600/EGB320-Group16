@@ -29,6 +29,8 @@ class PathProcess:
             if cls.rotlen is not None:
                 cls.rotlen -= abs(c_rot) * delta
             
+            # Note: if the segments are very short and we move fast, we maybe should be skipping some segments but this will not happen in the current code
+            # Todo if we go below 0, carry that over to the next segment and continue skipping any number of segments until the extra distance is accounted for
             if (cls.fwdlen is not None and cls.fwdlen <= 0) or (cls.rotlen is not None and cls.rotlen <= 0):
                 cls.next_seg()
             
@@ -41,7 +43,7 @@ class PathProcess:
     def next_seg(cls, inc=True):
         if inc:
             cls.seg += 1
-            
+
         if cls.seg < len(cls.path):
             cls.fwd, cls.rot, cls.fwdlen, cls.rotlen = cls.path[cls.seg]
         else:
