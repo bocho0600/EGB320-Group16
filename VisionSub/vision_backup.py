@@ -4,11 +4,14 @@ import numpy as np
 from threading import Thread
 import vision as vs
 import time
+import RP2040 as rp
 
-
+# Servo S3 is 6 kg/cm3
+# Servo S2 is 3 kg/cm3
 
 def main():
-      
+      i2c = rp.I2C()
+      i2c.ServoSet(3,0)
       FRAME_WIDTH = 820
       FRAME_HEIGHT = 616
       cam = vs.CamFrameGrabber(src=0, height=FRAME_WIDTH, width=FRAME_HEIGHT)

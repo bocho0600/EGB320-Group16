@@ -1,15 +1,6 @@
 import cv2
 import numpy as np
 import vision as vs
-
-
-import cv2
-import math
-
-import cv2
-import math
-
-import cv2
 import math
 
 def is_edge_line(pt1, pt2, image_width, image_height):
