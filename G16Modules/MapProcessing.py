@@ -19,6 +19,8 @@ class ArenaMap:
         shelf_depth = 0.125
         sl = []
 
+        shelf_points = []
+
         shelf_1 = np.array([[0.,height-shelf_length],
                             [shelf_depth,height-shelf_length],
                             [shelf_depth,height],
@@ -36,6 +38,15 @@ class ArenaMap:
         sl.append(shelf_2 + np.array([2.*width/3., 0.]))
         sl.append(shelf_1 + np.array([width-shelf_depth,0.]))
         sl = np.array(sl)
+
+        shelf_points = sl[:, :-1, :].reshape(16, 2)
+        self.shelf_points = shelf_points
+
+        marker_locations = []
+        marker_locations.append([width, 1*width/6])
+        marker_locations.append([width, 3*width/6]) 
+        marker_locations.append([width, 5*width/6]) 
+        self.marker_locations = np.array(marker_locations)
 
         packing_station_size = 0.585
         packing_station_flat = 0.29
@@ -61,6 +72,8 @@ class ArenaMap:
         image = cv2.fillPoly(image, pts=(self.packing_lines * scale).astype(np.int32), color=(0,255,255))
         image = cv2.fillPoly(image, pts=(self.shelf_lines * scale).astype(np.int32), color = (255, 0,0))
         
+        self.arena_image = image.copy()
+
         # Show image
         return image
     
@@ -74,7 +87,7 @@ class ArenaMap:
             case "wall":
                 segments = self.wall_lines
             case _:
-                segments = self.shelf_lines + self.packing_lines + self.wall_lines
+                segments = np.concatenate([self.shelf_lines, self.wall_lines], 0)
                 return None
             
         # Dims: 0=line; 1=start/end; 2=x/y 
@@ -108,31 +121,75 @@ class ArenaMap:
         
         return closest_segment, distance_to
 
+    
+         
 
-    # Finally to get an weight, translate each observed point to the closest VISIBLE line segment of the correct type,
-    # Then take the distance from the point to the line, then apply a weighting function (representing the observation error distribution)
-    # We have a confidence for each data point, then take the product of all those to get the obesrvation confidence
+    def getForce(self, point):
+        segments = np.concatenate([self.shelf_lines, self.wall_lines], 0)
+
+         # Dims: 0=line; 1=start/end; 2=x/y 
+        segments = np.array([segments[:, :-1, :], segments[:, 1:, :]]).transpose((1,2,0,3)).reshape((-1, 2, 2))
+        ds = segments[:, 1, :] - segments[:, 0, :] # end - start
+        cs = point - segments[:, 0, :] # point - start
+
+        # ts is the point from 0 to 1 along the segment which is closest
+        ts = (cs * ds).sum(1) / (ds*ds).sum(1)
+        ts = np.clip(ts, 0, 1)
+
+        # ps is the projections from point onto each segment (closest point on each segment)
+        ps = segments[:, 0, :] + np.array([ts,ts]).T * ds
+
+        # vector from projection (closest point on each segment) to the point
+        ls = point - ps 
+
+        # distances
+        qs = np.sqrt((ls*ls).sum(1))
+
+        def force_fun(x):
+            x = np.abs(x)
+            margin = 0.2 # metres to stay away from it
+            alpha = 3
+            x[x>margin] = margin
+            return ((margin - x) / margin)**alpha
+
+        f = force_fun(qs)
+        force = np.c_[f,f] * ls / np.c_[qs,qs]
+
+
+        return force.sum(0)
+        
 
 
 map = None
 
 def onMouseClick(event, x, y, flags, param):
-    global robot_position
+    global target_position
     scale = 512/2.0
     if flags & 1:
         point = np.array([x, y]) / scale
-        closest, dist = map.closestSegment(point, "shelf",robot_position)
-        sexy = (closest * scale).astype(np.int32)
-        disp_im = cv2.line(image.copy(), sexy[0, :], sexy[1, :], (0, 0, 255), 2)
-        disp_im = cv2.drawMarker(disp_im, (robot_position*scale).astype(np.int32), (0,0,0), 15)
+
+        path = [point]
+        ds = 0.01 # m
+        for i in range(50):
+            R = (target_position - point)
+            force = 10 * map.getForce(point) + R
+            #force = force / np.sqrt(np.sqrt((force*force).sum()))
+            point = point.copy() + ds * force
+            path.append(point)
+            if (R*R).sum() < 0.05**2:
+                break
+        
+        path = np.array(path)
+        disp_im = cv2.drawMarker(image.copy(), (target_position*scale).astype(np.int32), (0,0,0), 15)
+        disp_im = cv2.polylines(disp_im, [(path*scale).astype(np.int32)], False, (0, 0, 255), 2)
+      
         cv2.imshow("Arena", disp_im)
     elif flags & 2:
-        robot_position = np.array([x, y]) / scale
-        disp_im = cv2.drawMarker(image.copy(), (robot_position*scale).astype(np.int32), (0,0,0), 15)
+        target_position = np.array([x, y]) / scale
+        disp_im = cv2.drawMarker(image.copy(), (target_position*scale).astype(np.int32), (0,0,0), 15)
         cv2.imshow("Arena", disp_im)
 
-robot_position = np.array([1.,1.])
-
+target_position = np.array([.1,.1])
 
 if __name__ == "__main__":
     map = ArenaMap()

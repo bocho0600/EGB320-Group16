@@ -3,13 +3,11 @@ import numpy as np
 import time
 from G16Modules.Globals import *
 from G16Modules.Vision import VisionModule
-from G16Modules.Navigation import NavigationModule, STATE
-#import RP2040 as I2C
+from G16Modules.NavigationGlobal import NavigationModule, STATE
 import VisionSub.csvread as csvread
 
 
 def main(): # Main function
-	#i2c = I2C.I2C()
 
 	# Possibly override color ranges for simulator
 	if hasattr(Specific, 'color_ranges'):
@@ -65,12 +63,14 @@ def main(): # Main function
 					t1 = t2
 			elif pipeline == 'nav':
 				# Full navigation move to the desired shelf
-				robotview, visout = VisionModule.Pipeline(False)
+				robotview, visout = VisionModule.Pipeline(draw)
 				# print(marker_distance, marker_bearing)
 				
 				if draw:
-					robotview = NavigationModule.update(robotview, visout)
+					robotview, img2 = NavigationModule.update(robotview, visout)
 					VisionModule.ExportImage("RobotView", robotview, FPS = True)
+					if img2 is not None:
+						VisionModule.ExportImage("Img 2", img2, FPS = False)
 				else:
 					robotview = NavigationModule.update(None, visout)
 

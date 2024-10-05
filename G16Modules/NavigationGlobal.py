@@ -6,6 +6,7 @@ import time
 from .Globals import *
 from .Vision import VisionModule
 # from .ItemCollection import ItemCollectionModule
+from .MapProcessing import ArenaMap
 from .PathProcess import PathProcess
 
 STATE = Enum('STATE', [
@@ -71,6 +72,9 @@ class NavigationModule:
 		cls.current_state = initial_state
 		cls.t_now = time.time()
 
+		cls.map = ArenaMap()
+		cls.map_image = cls.map.draw_arena(512)
+
 		PathProcess.Start()
 	
 	@classmethod
@@ -86,7 +90,7 @@ class NavigationModule:
 		cls.t_now = time.time()
 		delta = cls.t_now - t_last
 
-		debug_img = cls.try_localize(*args)
+		debug_img = cls.try_localize(delta, *args)
 
 		return debug_img
 	
@@ -94,7 +98,10 @@ class NavigationModule:
 	has_pose_estimate = False
 	time_since_localization = 0
 	
-
+	@classmethod
+	def localize(cls, x, y, image):
+		print(f"We are at ({x:.2f}, {y:.2f})")
+		cv2.drawMarker(image, (int(x*256), int(y*256)), (0,0,255), cv2.MARKER_TRIANGLE_UP, 20)
 
 	@classmethod
 	def try_localize(cls, delta, debug_img, visout):
@@ -145,6 +152,61 @@ class NavigationModule:
 		# in that case we just have to make sure that whenever we really want to move, we make sure we move faster than that.
 		# Whenever we want to move really slowly for some reason, just move minimum speed for less time. It will work
 		
+		image = cls.map_image.copy()
+
+		def checkContour(cont):
+			return cont is not None and len(cont) > 0
+
+		if checkContour(visout.contoursLoadingArea) and visout.aisle == 1:
+			# We might be able to localize off loading area
+			# Information: distance to marker, and bearing of BOTH edges of the loading area
+			# Both are needed to make sure one is the part touching the wall. (cant use the corner in the middle of the floor)
+
+			left, top, width, height = cv2.boundingRect(visout.contoursLoadingArea[0])
+			bottom = top+height
+			right = left+width
+
+			if left > 0 and right < SCREEN_WIDTH-1 and top > 0 and bottom < SCREEN_HEIGHT-1:
+				left_bearing = (left - SCREEN_WIDTH/2) * FOV_HORIZONTAL / SCREEN_WIDTH
+				right_bearing = (right - SCREEN_WIDTH/2) * FOV_HORIZONTAL / SCREEN_WIDTH
+				marker_bearing = visout.marker_bearing
+				marker_offet = 0.062 # marker distance from wall, x or y not diagonal
+				md = visout.marker_distance/100 * 1.06 # seemed to be a bit under idk why. 
+				lw = 0.585 # loading area width
+				lw_prime = np.sqrt((lw - marker_offet)**2 + marker_offet**2)
+				alpha_offset = np.arcsin(marker_offet / lw_prime)
+
+
+				# Choose the one closer in our view to the marker
+				ld = marker_bearing - left_bearing
+				rd = right_bearing - marker_bearing
+
+				if rd < ld:
+					# use right side
+					theta = rd
+					alpha_prime = pi - np.arcsin(np.sin(theta)*md/lw_prime)
+					alpha = alpha_prime + alpha_offset
+					phi = pi - theta - alpha
+					x = marker_offet + md * np.cos(phi)
+					y = marker_offet + md * np.sin(phi)
+				else:
+					# use left side
+					theta = ld
+					alpha_prime = pi - np.arcsin(np.sin(theta)*md/lw_prime)
+					alpha = alpha_prime + alpha_offset
+					phi = pi - theta - alpha
+					x = marker_offet + md * np.sin(phi)
+					y = marker_offet + md * np.cos(phi)
+				
+				if not np.isnan(x) and not np.isnan(y):
+					cls.localize(x,y, image)
+		
+		elif visout.aisle > 0 and checkContour(visout.contoursShelf) and not checkContour(visout.contoursObstacle):
+			# Marker, shelf and obstacle
+			# We might be able to localize of marker+shelf angle
+			# We will need to check that the marker is not obscured
+			pass
 	
-		pass
+		return debug_img, image
+
 	
