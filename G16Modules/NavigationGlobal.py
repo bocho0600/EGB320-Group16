@@ -37,13 +37,13 @@ class NavigationModule:
 
 	
 	MAX_ROBOT_VEL = 0.13 # m/s
-	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
-	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
+	ROTATIONAL_BIAS = 0.7 #tweak this parameter to be more or less aggressive with turns vs straight
+	Kp = 5.0 # proportional term. beware if its too high we will try to go backwards for sharp turns
 	MAX_ROBOT_ROT = pi/6 # rad/s
 	RADIUS = 0.15 # how far to stay away from wall
 
 	@classmethod
-	def set_velocity(cls, fwd, rot, delta):
+	def set_velocity(cls, fwd, rot):
 
 		# Specific.set_velocity(fwd, rot)
 		PathProcess.set_velocity(fwd, rot)
@@ -68,12 +68,15 @@ class NavigationModule:
 		cls.bay_width = cls.shelf_length / 4
 		cls.target_bay_distance = cls.shelf_length - cls.bay_width/2 - cls.target_bay*cls.bay_width
 		print(f"We want to be {cls.target_bay_distance} cm from aisle marker {cls.target_aisle}")
+		
 
 		cls.current_state = initial_state
 		cls.t_now = time.time()
 
 		cls.map = ArenaMap()
 		cls.map_image = cls.map.draw_arena(512)
+
+		cls.target_position = cls.map.marker_locations[cls.target_aisle-1] - np.array([cls.target_bay_distance/100, 0])
 
 		PathProcess.Start()
 	
@@ -85,29 +88,90 @@ class NavigationModule:
 
 	# Call current update function then update the current state
 	@classmethod
-	def update(cls,*args):
+	def update(cls,debug_img,visout):
 		t_last = cls.t_now
 		cls.t_now = time.time()
 		delta = cls.t_now - t_last
 
-		debug_img = cls.try_localize(delta, *args)
+		image = None
 
-		return debug_img
+		localized = cls.try_localize(visout)
+
+		if cls.has_pose_estimate:
+			if not localized:
+				cls.pose_x, cls.pose_y, cls.pose_h = PathProcess.get_current_track()
+				cls.dist_since_localization += (PathProcess.fwd + 0.2*PathProcess.rot)*delta
+
+
+			# Correction here
+
+			# Navigation
+			point = np.array([cls.pose_x, cls.pose_y])
+			diff = cls.target_position - point
+			force = 10 * cls.map.getForce(point) + diff # getforce is shelf/wall avoidance + diff is force to the goal
+			goal_error = np.arctan2(force[1], force[0]) - cls.pose_h
+			rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
+			forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+
+			#print(f"Force: {force[0]:.4f}, {force[1]:.4f}")
+
+			if debug_img is not None:
+				image = cls.map_image.copy()
+				robotcolor = (0,255,0) if localized else (0,0,255)
+				cv2.line(image, (int(cls.pose_x*256), int(cls.pose_y*256)), (int((cls.pose_x+0.1*cos(cls.pose_h))*256), int((cls.pose_y+0.1*cls.pose_h)*256)), robotcolor, cv2.MARKER_TRIANGLE_UP, 5)
+				cv2.line(image, (int(cls.pose_x*256), int(cls.pose_y*256)), (int((cls.pose_x+0.025*force[0])*256), int((cls.pose_y+0.025*force[1])*256)), (255,0,255), cv2.MARKER_TRIANGLE_UP, 3)
+
+				cv2.drawMarker(image, (256*cls.target_position).astype(np.int32), (0,0,0), cv2.MARKER_CROSS, 12)
+				cv2.drawMarker(image, (int(cls.pose_x*256), int(cls.pose_y*256)), robotcolor, cv2.MARKER_TRIANGLE_UP, 20)
+
+			cls.set_velocity(forward_vel, rotational_vel)
+
+			if cls.dist_since_localization > 4.0:
+				cls.we_are_lost()
+		else:
+			print("sad") # idk (use temp map)
+
+		return debug_img, image
 	
 
 	has_pose_estimate = False
-	time_since_localization = 0
+	dist_since_localization = -1
 	
+	pose_x = None
+	pose_y = None
+	pose_h = None
+
 	@classmethod
-	def localize(cls, x, y, heading, image):
+	def current_position(cls):
+		return np.array([cls.pose_x, cls.pose_y])
+
+	@classmethod
+	def we_are_lost(cls):
+		print("WE ARE LOST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		cls.has_pose_estimate = False
+		cls.dist_since_localization = -1
+		
+		cls.pose_x = None
+		cls.pose_y = None
+		cls.pose_h = None
+		PathProcess.stop_integrating()
+
+	@classmethod
+	def localize(cls, x, y, heading):
 		#print(f"We are at ({x:.2f}, {y:.2f})")
 		x_center = x - DIST_X * cos(heading)
 		y_center = y - DIST_X * sin(heading)
-		cv2.drawMarker(image, (int(x_center*256), int(y_center*256)), (0,0,255), cv2.MARKER_TRIANGLE_UP, 20)
-		cv2.line(image, (int(x*256), int(y*256)), (int(x_center*256), int(y_center*256)), (0,0,255), cv2.MARKER_TRIANGLE_UP, 5)
+
+		cls.pose_x = x_center
+		cls.pose_y = y_center
+		cls.pose_h = heading
+		PathProcess.localize(x_center, y_center, heading)
+
+		cls.dist_since_localization = 0
+		cls.has_pose_estimate = True
 
 	@classmethod
-	def try_localize(cls, delta, debug_img, visout):
+	def try_localize(cls, visout):
 		# Check if we have enough information to localize absolutely (i.e., marker or packing station unobstructed)
 		# vis pipeline visout should give us processed shelf contours with lines and facing/fake/away points, sorted by x,
 		# marker and obstacle info etc. We want to project shelf points to floor and be able to find normals!
@@ -155,12 +219,11 @@ class NavigationModule:
 		# in that case we just have to make sure that whenever we really want to move, we make sure we move faster than that.
 		# Whenever we want to move really slowly for some reason, just move minimum speed for less time. It will work
 		
-		image = cls.map_image.copy()
 
 		def checkContour(cont):
 			return cont is not None and len(cont) > 0
 
-		if checkContour(visout.contoursLoadingArea) and visout.aisle == 1:
+		if False: # it isn't reliable enough # checkContour(visout.contoursLoadingArea) and visout.aisle == 1:
 			# We might be able to localize off loading area
 			# Information: distance to marker, and bearing of BOTH edges of the loading area
 			# Both are needed to make sure one is the part touching the wall. (cant use the corner in the middle of the floor)
@@ -206,7 +269,8 @@ class NavigationModule:
 					heading = -pi/2 - phi - marker_bearing
 
 				if not np.isnan(x) and not np.isnan(y):
-					cls.localize(x, y, heading, image)
+					cls.localize(x, y, heading,)
+					return True
 		
 		elif visout.aisle > 0 and checkContour(visout.contoursShelf) and not checkContour(visout.contoursObstacle):
 			# Marker, shelf and obstacle
@@ -251,20 +315,22 @@ class NavigationModule:
 						l2 = np.sqrt((vec2*vec2).sum())
 						return np.arccos(dot/l1/l2)
 
-					phi1 = angle_between(-ppoints[0], ppoints[1]-ppoints[0])
-					phi2 = angle_between(-ppoints[2], ppoints[3]-ppoints[2])
+					if abs(ppoints[0][0] - ppoints[2][0]) < 0.2: # protect against alse localization when the close point is detected as "away"
+						phi1 = angle_between(-ppoints[0], ppoints[1]-ppoints[0])
+						phi2 = angle_between(-ppoints[2], ppoints[3]-ppoints[2])
 
-					#print(f"can localize off corner angles: {corner1[2]:.1f} and {corner2[2]:.1f}... Got error {(phi1+phi2-theta1-theta2)*180/pi:.1f} degrees.")
+						#print(f"can localize off corner angles: {corner1[2]:.1f} and {corner2[2]:.1f}... Got error {(phi1+phi2-theta1-theta2)*180/pi:.1f} degrees.")
 
-					f1 = theta1-phi1
-					f2 = phi2-theta2
-					f = (f1 + f2) / 2
-					x = cls.map.marker_locations[visout.aisle-1][0] - md*np.cos(f)
-					y = cls.map.marker_locations[visout.aisle-1][1] - md*np.sin(f)
-					heading = f - marker_bearing
+						f1 = theta1-phi1
+						f2 = phi2-theta2
+						f = (f1 + f2) / 2
+						x = cls.map.marker_locations[visout.aisle-1][0] - md*np.cos(f)
+						y = cls.map.marker_locations[visout.aisle-1][1] - md*np.sin(f)
+						heading = f - marker_bearing
 
-					cls.localize(x, y, heading, image)
+						cls.localize(x, y, heading)
+						return True
 	
-		return debug_img, image
+		return False
 
 	
