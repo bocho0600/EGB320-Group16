@@ -27,33 +27,32 @@ class VisionModule:
 		'orange2': (np.array([165, 100, 0]), np.array([180, 255, 255])),
 		'black': (np.array([38,31, 45]), np.array([66, 121 , 88]))
 	}
-
-
 	
 	#region Contour Processing 
-	# DIST_X, DIST_Z and TILT are defined in Globals.py
+	@classmethod
+	def calculate_projection_transform(cls):
+		# DIST_X, DIST_Z and TILT are defined in Globals.py
 
-	# Precalculate Transformation Matrices and ground plane
-	camera_to_robot_rotate = np.array([
-			[cos(TILT), 0, -sin(TILT), 0],
-			[        0, 1,          0, 0],
-			[sin(TILT), 0,  cos(TILT), 0],
-			[        0, 0,          0, 1]])
-	camera_to_robot_translate = np.array([
-			[1, 0, 0, DIST_X],
-			[0, 1, 0,      0],
-			[0, 0, 1, DIST_Z],
-			[0, 0, 0,      1]])
-	
-	camera_to_robot = np.matmul(camera_to_robot_translate,camera_to_robot_rotate)
-	robot_to_camera = np.linalg.inv(camera_to_robot)
-	#robot_to_camera_translate = np.linalg.inv(camera_to_robot_translate)
-	robot_to_camera_rotate = np.linalg.inv(camera_to_robot_rotate)
+		# Precalculate Transformation Matrices and ground plane
+		cls.camera_to_robot_rotate = np.array([
+				[cos(TILT), 0, -sin(TILT), 0],
+				[        0, 1,          0, 0],
+				[sin(TILT), 0,  cos(TILT), 0],
+				[        0, 0,          0, 1]])
+		cls.camera_to_robot_translate = np.array([
+				[1, 0, 0, 0], # DIST_X
+				[0, 1, 0,      0],
+				[0, 0, 1, DIST_Z],
+				[0, 0, 0,      1]])
+		
+		cls.camera_to_robot = np.matmul(cls.camera_to_robot_translate,cls.camera_to_robot_rotate)
+		cls.robot_to_camera = np.linalg.inv(cls.camera_to_robot)
+		#robot_to_camera_translate = np.linalg.inv(camera_to_robot_translate)
+		cls.robot_to_camera_rotate = np.linalg.inv(cls.camera_to_robot_rotate)
 
-	# Normal and point of the ground plane, relative to camera
-	normal_camera = np.matmul(robot_to_camera_rotate , np.array([[0,0,1,1]]).T)[0:3, 0]
-	r_camera = np.matmul(robot_to_camera , np.array([[0,0,0,1]]).T)[0:3, 0]
-
+		# Normal and point of the ground plane, relative to camera
+		cls.normal_camera = np.matmul(cls.robot_to_camera_rotate , np.array([[0,0,1,1]]).T)[0:3, 0]
+		cls.r_camera = np.matmul(cls.robot_to_camera , np.array([[0,0,0,1]]).T)[0:3, 0]
 
 	@classmethod
 	def project_point_to_ground(cls,screen_coords):
@@ -254,7 +253,8 @@ class VisionModule:
 			contoursShelf=contoursShelf,
 			contoursObstacle=contoursObstacle,
 			detected_shelves=detected_shelves, 
-			contoursLoadingArea=contoursLoadingArea)
+			contoursLoadingArea=contoursLoadingArea,
+			shelfCorners=ShelfCorners)
 
 	#endregion
 
@@ -576,6 +576,7 @@ class VisionModule:
 							continue
 
 						corner_type = 'Facing'
+						imp_ang = (ang1, ang2)
 					else:
 						# One Horizontal and one vertical
 						if vert1:
@@ -583,6 +584,8 @@ class VisionModule:
 							if ang2 < 0:
 								continue
 							
+							imp_ang = ang2
+
 							# Classify using the vertical line dir
 							if ang1 > 0 :
 								corner_type = 'Fake'
@@ -594,16 +597,18 @@ class VisionModule:
 							if ang1 < 0:
 								continue
 
+							imp_ang = ang1
+
 							# Classify using the vertical line dir
 							if ang2 > 0 :
 								corner_type = 'Fake'
 							else:
 								corner_type = 'Away'
 
-					corners.append((pt1, corner_type))
+					corners.append((pt1, corner_type, imp_ang))
 
 		if draw:
-			for point, corner_type in corners:
+			for point, corner_type, imp_ang in corners:
 				if corner_type == 'Facing':
 					cv2.circle(robotview, tuple(point), 5, (255, 255, 255), -1)  # Draw white circle for facing corners
 				elif corner_type == 'Fake':
@@ -611,7 +616,7 @@ class VisionModule:
 				elif corner_type == 'Away':
 					cv2.circle(robotview, tuple(point), 5, (0, 0, 0), -1)  # Draw black circle for away corners
 
-		return robotview
+		return corners
 	#endregion
 	
 	@classmethod

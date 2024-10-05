@@ -19,6 +19,7 @@ def main(): # Main function
 		Specific.start()
 		instruction = instructions[3] # 1 2 4
 		
+		VisionModule.calculate_projection_transform()
 		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction) # Temp start = wander for debugging. normally it should be find_aisle_from_outside 
 		t1 = time.time()
 

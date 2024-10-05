@@ -14,7 +14,7 @@ if is_simulator:
 
 	DIST_X = 0.07 # cameraDistanceFromRobotCenter
 	DIST_Z = 0.0752 # cameraHeightFromFloor
-	TILT = 1.5 * 3.1415926535 / 180
+	TILT = 1.0 * 3.1415926535 / 180
 
 	from .SimSpecific import SimSpecific as Specific
 elif is_video:

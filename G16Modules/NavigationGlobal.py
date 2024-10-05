@@ -99,9 +99,12 @@ class NavigationModule:
 	time_since_localization = 0
 	
 	@classmethod
-	def localize(cls, x, y, image):
-		print(f"We are at ({x:.2f}, {y:.2f})")
-		cv2.drawMarker(image, (int(x*256), int(y*256)), (0,0,255), cv2.MARKER_TRIANGLE_UP, 20)
+	def localize(cls, x, y, heading, image):
+		#print(f"We are at ({x:.2f}, {y:.2f})")
+		x_center = x - DIST_X * cos(heading)
+		y_center = y - DIST_X * sin(heading)
+		cv2.drawMarker(image, (int(x_center*256), int(y_center*256)), (0,0,255), cv2.MARKER_TRIANGLE_UP, 20)
+		cv2.line(image, (int(x*256), int(y*256)), (int(x_center*256), int(y_center*256)), (0,0,255), cv2.MARKER_TRIANGLE_UP, 5)
 
 	@classmethod
 	def try_localize(cls, delta, debug_img, visout):
@@ -162,6 +165,8 @@ class NavigationModule:
 			# Information: distance to marker, and bearing of BOTH edges of the loading area
 			# Both are needed to make sure one is the part touching the wall. (cant use the corner in the middle of the floor)
 
+			# Todo should also be checking if the packing station is obscured by a shelf (or obstacle)
+
 			left, top, width, height = cv2.boundingRect(visout.contoursLoadingArea[0])
 			bottom = top+height
 			right = left+width
@@ -189,6 +194,7 @@ class NavigationModule:
 					phi = pi - theta - alpha
 					x = marker_offet + md * np.cos(phi)
 					y = marker_offet + md * np.sin(phi)
+					heading = phi - pi - marker_bearing
 				else:
 					# use left side
 					theta = ld
@@ -197,15 +203,67 @@ class NavigationModule:
 					phi = pi - theta - alpha
 					x = marker_offet + md * np.sin(phi)
 					y = marker_offet + md * np.cos(phi)
-				
+					heading = -pi/2 - phi - marker_bearing
+
 				if not np.isnan(x) and not np.isnan(y):
-					cls.localize(x,y, image)
+					cls.localize(x, y, heading, image)
 		
 		elif visout.aisle > 0 and checkContour(visout.contoursShelf) and not checkContour(visout.contoursObstacle):
 			# Marker, shelf and obstacle
 			# We might be able to localize of marker+shelf angle
 			# We will need to check that the marker is not obscured
-			pass
+			
+			if visout.shelfCorners is not None and len(visout.shelfCorners) > 0 and len(visout.shelfCorners) <= 4:
+				# We are facing down an aisle. Need to check that the two corners left and right of the marker are both 'away' and get their angles
+
+				corner1 = None
+				corner2 = None
+
+				marker_pixel = (visout.marker_bearing * SCREEN_WIDTH/FOV_HORIZONTAL) + SCREEN_WIDTH/2
+				md = visout.marker_distance / 100
+				marker_bearing = visout.marker_bearing
+				for i, corner in enumerate(reversed(visout.shelfCorners)):
+					if corner[0][0] < marker_pixel:
+						if corner[1] == 'Away':
+							corner1 = corner
+						break
+				for i, corner in enumerate(visout.shelfCorners):
+					if corner[0][0] > marker_pixel:
+						if corner[1] == 'Away':
+							corner2 = corner
+						break
+				
+				if corner1 is not None and corner2 is not None:
+					
+
+					my_points = np.array([
+						corner1[0], corner1[0] + 70*np.array([cos(corner1[2]*pi/180), sin(corner1[2]*pi/180)]),
+				  		corner2[0], corner2[0] + 70*np.array([cos(corner2[2]*pi/180), sin(corner2[2]*pi/180)])])
+				
+					ppoints = VisionModule.project_point_to_ground(my_points)
+
+					theta1 = marker_bearing - (corner1[0][0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH
+					theta2 = (corner2[0][0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH - marker_bearing
+
+					def angle_between(vec1, vec2):
+						dot = (vec1*vec2).sum()
+						l1 = np.sqrt((vec1*vec1).sum())
+						l2 = np.sqrt((vec2*vec2).sum())
+						return np.arccos(dot/l1/l2)
+
+					phi1 = angle_between(-ppoints[0], ppoints[1]-ppoints[0])
+					phi2 = angle_between(-ppoints[2], ppoints[3]-ppoints[2])
+
+					#print(f"can localize off corner angles: {corner1[2]:.1f} and {corner2[2]:.1f}... Got error {(phi1+phi2-theta1-theta2)*180/pi:.1f} degrees.")
+
+					f1 = theta1-phi1
+					f2 = phi2-theta2
+					f = (f1 + f2) / 2
+					x = cls.map.marker_locations[visout.aisle-1][0] - md*np.cos(f)
+					y = cls.map.marker_locations[visout.aisle-1][1] - md*np.sin(f)
+					heading = f - marker_bearing
+
+					cls.localize(x, y, heading, image)
 	
 		return debug_img, image
 
