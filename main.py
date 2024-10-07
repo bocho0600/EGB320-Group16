@@ -17,10 +17,10 @@ def main(): # Main function
 	try:
 		
 		Specific.start()
-		instruction = instructions[3] # 1 2 4
 		
 		VisionModule.calculate_projection_transform()
-		NavigationModule.init(STATE.LOST, instruction)
+		starting_instruction = 1
+		NavigationModule.init(STATE.LOST, instructions, starting_instruction)
 		t1 = time.time()
 
 		pipeline = 'nav'
@@ -30,7 +30,7 @@ def main(): # Main function
 		
 			if pipeline == 'debug_distmap':
 				# Run vision and most CPU-intensive nav code but don't move
-
+				NavigationModule.current_state = STATE.VEGETABLE
 				robotview, visout = VisionModule.Pipeline(False)
 				points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
 				points = VisionModule.handle_outer_contour(points)
@@ -42,12 +42,20 @@ def main(): # Main function
 					if draw:
 						robotview = cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
 						robotview = cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+						projection_image = np.zeros(robotview.shape)
+
+						cv2.line(projection_image, (0, SCREEN_HEIGHT-100), (SCREEN_WIDTH-1, SCREEN_HEIGHT-100), (0,0,255), 1)		
+						for i in range(len(projected_floor)):
+							cv2.drawMarker(projection_image, tuple((np.array([SCREEN_WIDTH/2, SCREEN_HEIGHT])+np.array([100, -100])*projected_floor[i, ::-1]).astype(np.int32)), (255,255,255), cv2.MARKER_DIAMOND, 4)
 				else:
 					print("No shelf points found")
+					if draw:
+						projection_image = np.zeros(robotview.shape)
 				
 				
 				if draw:
 					VisionModule.ExportImage("RobotView", robotview, FPS = True)
+					VisionModule.ExportImage("Map", projection_image, FPS = False)
 				else:
 					t2 = time.time()
 					print(f"FPS: {1.0/(t2-t1):.1f}")

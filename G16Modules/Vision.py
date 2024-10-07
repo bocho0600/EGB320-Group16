@@ -40,7 +40,7 @@ class VisionModule:
 				[sin(TILT), 0,  cos(TILT), 0],
 				[        0, 0,          0, 1]])
 		cls.camera_to_robot_translate = np.array([
-				[1, 0, 0, 0], # DIST_X
+				[1, 0, 0, DIST_X],
 				[0, 1, 0,      0],
 				[0, 0, 1, DIST_Z],
 				[0, 0, 0,      1]])
@@ -210,7 +210,7 @@ class VisionModule:
 
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
-		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
+		ContoursMarkers, mask1 = cls.findMarkers(WallRGB, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, draw=draw)
 
 		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
@@ -236,7 +236,7 @@ class VisionModule:
 
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
-		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
+		ContoursMarkers, mask1 = cls.findMarkers(WallRGB, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, draw=draw)
 
 		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
@@ -320,14 +320,22 @@ class VisionModule:
 		return contoursShelf, ShelfMask
 
 	@classmethod
-	def findLoadingArea(cls, imgHSV):
+	def findLoadingArea(cls, imgHSV, area_threshold=100, chain=cv2.CHAIN_APPROX_SIMPLE):
+		# Create a mask for the blue color range
 		LoadingAreaMask = cv2.inRange(imgHSV, cls.color_ranges['yellow'][0], cls.color_ranges['yellow'][1])
-		contoursLoadingArea, _ = cv2.findContours(LoadingAreaMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		
+		# Find contours on the mask
+		contoursLoadingArea, _ = cv2.findContours(LoadingAreaMask, cv2.RETR_EXTERNAL, chain)
+
+		# Filter out small contours by area
+		contoursLoadingArea = [cnt for cnt in contoursLoadingArea if cv2.contourArea(cnt) > area_threshold]
+
 		return contoursLoadingArea, LoadingAreaMask
 
 	@classmethod
 	def findObstacle(cls, imgHSV, area_threshold=100, chain=cv2.CHAIN_APPROX_SIMPLE):
 		ObstacleMask = cv2.inRange(imgHSV, cls.color_ranges['green'][0], cls.color_ranges['green'][1])
+		ObstacleMask = cv2.morphologyEx(ObstacleMask, cv2.MORPH_DILATE, np.ones((8,8)))
 		contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, chain)
 
 		# Filter out small contours by area
@@ -376,12 +384,13 @@ class VisionModule:
 		return WallImg, WallImgGray, filledWallMask, contoursWall1
 
 	@classmethod # Returns markers contours inside wall. Need to call findWall first
-	def findMarkers(cls, WallImgGray, WallMask):
-		_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+	def findMarkers(cls, WallRGB, WallMask):
+		mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+		#_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
 		markers = cv2.bitwise_and(WallMask, mask)
-		_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
-		ContoursMarkers, _ = cv2.findContours(mask1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		return ContoursMarkers, mask1
+		#_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
+		ContoursMarkers, _ = cv2.findContours(markers, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		return ContoursMarkers, markers
 	
 	@classmethod # Input: marker contours, Output: marker avg center, bearing, distance, count (aisle number). Would be nice to tell if any markers are blocked
 	def GetInfoMarkers(cls, robotview, ContoursMarkers, draw=True):
@@ -439,12 +448,12 @@ class VisionModule:
 				pass
 			elif shape_count == 2:
 				# Too far apart
-				if ([(x-avg_center[0])**2+(y-avg_center[1])**2 for x, y in centers] > (5 * avg_radius)**2).any():
+				if (np.array([(x-avg_center[0])**2+(y-avg_center[1])**2 for x, y in centers]) > (5 * avg_radius)**2).any():
 					avg_center = None
 					avg_bearing = None
 					avg_distance = None
 					shape_count = 0
-				if ([radius - avg_radius for radius in centers] > (avg_radius)**2).any():
+				if (np.array([radius - avg_radius for radius in radii]) > (avg_radius)**2).any():
 					avg_center = None
 					avg_bearing = None
 					avg_distance = None
@@ -478,7 +487,7 @@ class VisionModule:
 		centers = []
 		radius = 0
 		for contour in contours:
-			if cv2.contourArea(contour) > 1000:
+			if cv2.contourArea(contour) > 100: # was 1000 but jasper changed to be consistent with contour filter in Pipeline
 				# Calculate the contour's center using moments
 				M = cv2.moments(contour)
 				if M['m00'] != 0:  # Avoid division by zero
