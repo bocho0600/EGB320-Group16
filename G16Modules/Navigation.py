@@ -10,19 +10,14 @@ from .PathProcess import PathProcess
 
 STATE = Enum('STATE', [
 	'LOST',
-	'WANDER',
-	'FIND_AISLE_FROM_OUTSIDE',
+	'LOST_OUTSIDE_AISLE',
+	'LOST_INSIDE_AISLE',
 	'AISLE_DOWN',
-	'AISLE_DOWN_BAY3',
-	'FACE_BAY',
+	'BLIND_MOVE', # This one is more of an "action" than a state
 	'COLLECT_ITEM',
-	'FACE_OUT',
-	'WANDER_OUT',
-	'FACE_PACKING',
+	'AISLE_OUT',
 	'APPROACH_PACKING',
-	'ASCEND_PACKING',
 	'DROP_ITEM',
-	'DESCEND_PACKING',
 	])
 
 PHASE = Enum('PHASE', [
@@ -56,8 +51,8 @@ class NavigationModule:
 	#region state machine
 	# For each state define a start and update function stored in this dict
 	state_callbacks = {}
-	current_state = STATE.WANDER
-	
+	current_state = STATE.LOST
+	current_phase = PHASE.COLLECT
 
 	@classmethod
 	def init(cls, initial_state,instruction):
@@ -74,13 +69,15 @@ class NavigationModule:
 		cls.target_bay_distance = cls.shelf_length - cls.bay_width/2 - cls.target_bay*cls.bay_width
 		print(f"We want to be {cls.target_bay_distance} cm from aisle marker {cls.target_aisle}")
 
-		cls.state_callbacks[STATE.LOST] = (cls.lost_start, cls.lost_update)
-		cls.state_callbacks[STATE.WANDER] = (cls.wander_start, cls.wander_update)
-		cls.state_callbacks[STATE.FIND_AISLE_FROM_OUTSIDE] = (cls.fafo_start, cls.fafo_update)
-		cls.state_callbacks[STATE.AISLE_DOWN] = (cls.aisle_down_start, cls.aisle_down_update)
-		cls.state_callbacks[STATE.AISLE_DOWN_BAY3] = (cls.adb3_start, cls.adb3_update)
-		cls.state_callbacks[STATE.FACE_BAY] = (cls.face_bay_start, cls.face_bay_update)
-		cls.state_callbacks[STATE.COLLECT_ITEM] = (cls.collect_item_start, cls.collect_item_update)
+		cls.state_callbacks[STATE.LOST] = (cls.LOST_start, cls.LOST_update)
+		cls.state_callbacks[STATE.LOST_OUTSIDE_AISLE] = (cls.LOST_OUTSIDE_AISLE_start, cls.LOST_OUTSIDE_AISLE_update)
+		cls.state_callbacks[STATE.LOST_INSIDE_AISLE] = (cls.LOST_INSIDE_AISLE_start, cls.LOST_INSIDE_AISLE_update)
+		cls.state_callbacks[STATE.AISLE_DOWN] = (cls.AISLE_DOWN_start, cls.AISLE_DOWN_update)
+		cls.state_callbacks[STATE.BLIND_MOVE] = (cls.BLIND_MOVE_start, cls.BLIND_MOVE_update)
+		cls.state_callbacks[STATE.COLLECT_ITEM] = (cls.COLLECT_ITEM_start, cls.COLLECT_ITEM_update)
+		cls.state_callbacks[STATE.AISLE_OUT] = (cls.AISLE_OUT_start, cls.AISLE_OUT_update)
+		cls.state_callbacks[STATE.APPROACH_PACKING] = (cls.APPROACH_PACKING_start, cls.APPROACH_PACKING_update)
+		cls.state_callbacks[STATE.DROP_ITEM] = (cls.DROP_ITEM_start, cls.DROP_ITEM_update)
 
 		cls.current_state = initial_state
 		cls.t_now = time.time()
@@ -116,7 +113,7 @@ class NavigationModule:
 		if new_state != cls.current_state:
 			cls.current_state = new_state
 			cls.call_current_start()
-		return debug_img
+		return debug_img, None
 	#endregion
 
 	#region Utility Functions
@@ -205,6 +202,10 @@ class NavigationModule:
 
 		return dist_map
 
+	@staticmethod
+	def checkContour(cont):
+		return cont is not None and len(cont) > 0
+
 	@classmethod
 	def forced_avoidance_start(cls):
 		cls.last_left_dist = 2.0
@@ -260,6 +261,21 @@ class NavigationModule:
 		if cls.avoid_left>0:
 			cls.avoid_left -= fwd * delta
 
+	@classmethod
+	def move_into_path(cls, target):
+		# Todo implement this as an funciton to do all the shelf/obstacle contour point processing and avoidance
+		# We might want to move towards the marker if visible, or track the marker from where we last saw it??
+		# Or an esimated entry point
+
+		robotview, visout = VisionModule.Pipeline(False)
+		points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
+		points = VisionModule.handle_outer_contour(points)
+		points, projected_floor = VisionModule.project_and_filter_contour(points)
+		if points is not None and points.shape[0] > 3:
+			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
+			safety_map = NavigationModule.expand_safety(dist_map)
+		pass
+
 	
 	times = []
 	tnames = []
@@ -283,282 +299,470 @@ class NavigationModule:
 	#endregion
 	
 	#region State Callbacks
+
 	@classmethod
-	def lost_start(cls):
+	def LOST_start(cls):
 		print("Lost!")
-
-	@classmethod
-	def lost_update(cls,delta, debug_img, *args):
-		return STATE.WANDER, debug_img
-
-	@classmethod
-	def wander_start(cls):
-		pass
-
-
-	@classmethod
-	def wander_update(cls, delta, debug_img, visout):
-		
-		if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8 and visout.aisle == cls.target_aisle:
-			cls.wander_until_distance = None
-			return STATE.AISLE_DOWN, debug_img
-
-		points = VisionModule.combine_contour_points(visout.contours, False)
-		points = VisionModule.handle_outer_contour(points)
-		points, projected_floor = VisionModule.project_and_filter_contour(points)
-
-
-		dist_map = None
-		if points is not None and points.shape[0] > 3:
-	
-			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
-		
-			if debug_img is not None:
-				# draw
-				cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
-				cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
-		
-			dist_map = cls.forced_avoidance(dist_map)
-
-			if debug_img is not None:
-				if cls.avoid_left > 0:
-					debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
-				if cls.avoid_right > 0:
-					debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
-
-			safety_map = cls.expand_safety(dist_map)
-			
-			if debug_img is not None:
-				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
-
-
-			if abs(safety_map.max() - safety_map.min()) < 0.01:
-				# no safe path- turn and dont move forward
-				
-				goal_error = (dist_map[:,0].argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
-				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
-
-				#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
-				forward_vel = 0
-
-				if debug_img is not None:
-					debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
-
-				if abs(goal_error) < 0.05: #radians
-					print("Probably stuck")
-					cls.wander_until_distance = None
-					return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
-				
-			else:
-				# move into the longest safe path
-				goal_error = (safety_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
-				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
-				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
-
-				if debug_img is not None:
-					debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
-
-
-			if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
-				print(f"We wandered until {dist_map[:, 0].max()} < {cls.wander_until_distance}")
-				cls.wander_until_distance = None
-				return cls.next_state, debug_img
-				
-		else:
-			cls.forced_avoidance(None)
-			rotational_vel = cls.MAX_ROBOT_ROT
-			forward_vel = 0
-
-		
-		cls.set_velocity(forward_vel,rotational_vel, delta)
-
-
-		return STATE.WANDER, debug_img
+		cls.is_inside_aisle = True
+		PathProcess.new_path([(0, cls.MAX_ROBOT_ROT, None, 2*pi)])
 	
 	@classmethod
-	def fafo_start(cls):
-		if not hasattr(cls, 'fafo_react_marker'):
-			cls.fafo_react_marker = False
+	def LOST_update(cls, delta, debug_img, visout):
+		# turn 360
+		# if we at any point see no shelves, -> LOST_OUTSIDE_AISLE
+		# if not, -> LOST_INSIDE_AISLE
+		# optionally calculate a (m/s to pwm factor)
+		# also if we are in dropoff, try to remember where the packing station is. 
+
+		if visout.detected_shelves is None:
+			cls.is_inside_aisle = False
+			return STATE.LOST_OUTSIDE_AISLE, debug_img
+	
+		if PathProcess.completed:
+			return STATE.LOST_INSIDE_AISLE, debug_img
+
+
+		return STATE.LOST, debug_img
+
+
 
 	@classmethod
-	def fafo_update(cls, delta, debug_img, visout):
-		# Aisle 1: rotate right until we cant see shelf then change to wander to continue rotating right until we see a shelf
-		# Aisle 2: rotate right until we cant see shelf then change to wander to continue rotating right until we see a shelf and move forward until we are 1m away then switch back to fafo
-		# Aisle 3: rotate until we see a marker
-
-		if cls.fafo_react_marker and visout.aisle is not None and visout.aisle == cls.target_aisle:
-			return STATE.AISLE_DOWN, debug_img
-
-
-		if cls.target_aisle == 1:
-			if visout.detected_shelves is not None:
-				cls.set_velocity(0, cls.MAX_ROBOT_ROT, delta)
-			else:
-				# Wander until we get stuck
-				cls.fafo_react_marker = True # When we get stuck we go to fafo then we should find the marker
-				return STATE.WANDER, debug_img
-		elif cls.target_aisle == 2:
-			if visout.detected_shelves is not None:
-				cls.set_velocity(0, cls.MAX_ROBOT_ROT, delta)
-			else:
-				# Wander until we are that far from furthest point
-				cls.fafo_react_marker = True # When we get back to fafo then we should find the marker
-				cls.wander_until_distance = 1.3 # "metres"
-				cls.next_state = STATE.FIND_AISLE_FROM_OUTSIDE
-				return STATE.WANDER, debug_img
-				
-		elif cls.target_aisle == 3:
-			if visout.aisle is None or visout.aisle < 1:
-				cls.set_velocity(0, -cls.MAX_ROBOT_ROT, delta)
-			else:
+	def LOST_OUTSIDE_AISLE_start(cls):
+		if cls.current_phase == PHASE.COLLECT:
+			# if we're going to aisle, find (estimate) entry point
+			cls.found_entry_point = False
+			if cls.target_aisle == 1:
+				PathProcess.set_velocity(0, cls.MAX_ROBOT_ROT)
+			elif cls.target_aisle == 2:
+				PathProcess.set_velocity(0, cls.MAX_ROBOT_ROT)
+			elif cls.target_aisle == 3:
+				PathProcess.set_velocity(0, -cls.MAX_ROBOT_ROT)
+		elif cls.current_phase == PHASE.DROPOFF:
+			# if we're going to packing station, go there
+			# (face it then -> APPROACH_PACKING)
+			PathProcess.set_velocity(0, -cls.MAX_ROBOT_ROT)
+	
+	@classmethod
+	def LOST_OUTSIDE_AISLE_update(cls, delta, debug_img, visout):
+		if cls.current_phase == PHASE.COLLECT:
+			# if we're going to aisle, find (estimate) entry point
+			if visout.aisle == cls.target_aisle:
 				return STATE.AISLE_DOWN, debug_img
-		else:
-			print("Target Aisle out of bounds")
-
-		return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
-
-	@classmethod
-	def aisle_down_start(cls):
-		pass
-		
-
-	@classmethod
-	def aisle_down_update(cls, delta, debug_img, visout):
-
-
-		if visout.marker_distance is None:
-			return STATE.LOST, debug_img
-		
-		if cls.target_bay < 3 and visout.marker_distance < cls.target_bay_distance:
-			return STATE.FACE_BAY, debug_img
-		elif cls.target_bay == 3 and visout.marker_distance < (cls.target_bay_distance + cls.bay_width):
-			return STATE.AISLE_DOWN_BAY3, debug_img
-
-		if visout.aisle > cls.target_aisle:
-			# Go back to fafo if we can see MORE markers than we should.
-			# If we can see less markers the markers could be occluded
-			return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
-		
-
-		points = VisionModule.combine_contour_points(visout.contours, False)
-		points = VisionModule.handle_outer_contour(points)
-		points, projected_floor = VisionModule.project_and_filter_contour(points)
-		dist_map = None
-		if points is not None and points.shape[0] > 3:
 			
-			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
+			if ((cls.target_aisle == 1 or cls.target_aisle == 3) and visout.detected_shelves is not None) or\
+				((cls.target_aisle == 2) and visout.detected_shelves is not None and abs(sum((shelf[0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH for shelf in visout.detected_shelves)/len(visout.detected_shelves)) < 10*pi/180):
+				distance = cls.move_into_path('longest')
 
-			if debug_img is not None:
-				# draw
-				cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
-				cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
-		
-			dist_map = cls.forced_avoidance(dist_map)
-			
-			if debug_img is not None:
-				if cls.avoid_left > 0:
-					debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
-				if cls.avoid_right > 0:
-					debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+				if (cls.target_aisle == 1 and distance < 0.4) or\
+					(cls.target_aisle == 2 and distance < 1.2) or\
+					(cls.target_aisle == 3 and distance < 0.4):
+					cls.found_entry_point = True
 
-			safety_map = cls.expand_safety(dist_map)
-			# repulsive_map = (safety_map < 0.3)*1
+				if cls.found_entry_point:
+					if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
+						# shelf is on the right
+						PathProcess.set_velocity(0, cls.MAX_ROBOT_ROT * 0.6)
+					else:
+						# shelf is on the left
+						PathProcess.set_velocity(0, -cls.MAX_ROBOT_ROT * 0.6)
+					
+					# Assume we are at the right aisle
+					# Accept just a bearing (marker can be obscured)
+					# Note aisle_down might need the marker not to be obscured...
+					if visout.marker_bearing is not None:
+						return STATE.AISLE_DOWN, debug_img
 
-			attractive_map = np.zeros(safety_map.size)
-			for i in range(safety_map.size):
-				bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
-				attractive_map[i] = 1.0 - 0.6 * abs(bearing - visout.marker_bearing)
-			
-			if debug_img is not None:
-				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
-
-			if abs(safety_map.min() - safety_map.max()) < 0.01:
-				cls.forced_avoidance_start() #reset FA
-				forward_vel = -cls.MAX_ROBOT_VEL/2
-				rotational_vel = 0
 			else:
-				potential_map = attractive_map + safety_map
+				cls.found_entry_point = False
+				if cls.target_aisle == 1 or cls.target_aisle == 2:
+					PathProcess.set_velocity(0, cls.MAX_ROBOT_ROT)
+				elif cls.target_aisle == 3:
+					PathProcess.set_velocity(0, -cls.MAX_ROBOT_ROT)
 
-				if debug_img is not None:
-					debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
-					debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+		elif cls.current_phase == PHASE.DROPOFF:
+			# if we're going to packing station, go there
+			# (face it then -> APPROACH_PACKING)
+			x, y, w, h = cv2.boundingRect(visout.contoursLoadingArea[0])
+			cx = x + w
+			bearing = (cx - SCREEN_WIDTH/2) * FOV_HORIZONTAL/SCREEN_WIDTH
+
+			if abs(bearing) < 10 * pi/180:
+				return STATE.APPROACH_PACKING, debug_img
+			
+		return STATE.LOST_OUTSIDE_AISLE, debug_img
+
+
+
+	@classmethod
+	def LOST_INSIDE_AISLE_start(cls):
+		pass
+	
+	@classmethod
+	def LOST_INSIDE_AISLE_update(cls, delta, debug_img, visout):
+		if cls.current_phase == PHASE.COLLECT:
+			# find marker then -> AISLE_DOWN
+			pass
+		elif cls.current_phase == PHASE.DROPOFF:
+			# find exit (2 shelves no marker) then -> AISLE_OUT
+			pass
+		return cls.current_state, debug_img
+
+
+
+	@classmethod
+	def AISLE_DOWN_start(cls):
+		pass
+	
+	@classmethod
+	def AISLE_DOWN_update(cls, delta, debug_img, visout):
+		# move forward avoid obstacles. 
+		# try to move towards the marker, if we can't see the marker then use the longest safe path
+		# Once we reach target distance (or less) queue a blind_move into collect_item into blind_move to face out
+		# For bay3 an addition forward move is required
+		return cls.current_state, debug_img
+
+
+
+	@classmethod
+	def BLIND_MOVE_start(cls):
+		pass
+	
+	@classmethod
+	def BLIND_MOVE_update(cls, delta, debug_img, visout):
+		# This one is more of an "action" than a state
+		# Use PathProcess and switch to another state when the movement is done
+		return cls.current_state, debug_img
+
+
+
+	@classmethod
+	def COLLECT_ITEM_start(cls):
+		pass
+	
+	@classmethod
+	def COLLECT_ITEM_update(cls, delta, debug_img, visout):
+		# Attempt to collect the item.
+		return cls.current_state, debug_img
+
+
+
+	@classmethod
+	def AISLE_OUT_start(cls):
+		pass
+	
+	@classmethod
+	def AISLE_OUT_update(cls, delta, debug_img, visout):
+		# We should be able to see two shelves and no marker. (or marker and packing station)
+		# Move towards the exit point, which is the center of the gap between the shelves
+		# When we can no longer see the shelves, queue a blind move forwards into -> LOST_OUTSIDE_AISLE
+		return cls.current_state, debug_img
+
+
+
+	@classmethod
+	def APPROACH_PACKING_start(cls):
+		pass
+	
+	@classmethod
+	def APPROACH_PACKING_update(cls, delta, debug_img, visout):
+		# We should be able to see the packing station at all times.
+		# Move towards the center of the packing station until its bounding box touches left and right of screen
+		# then move towards the marker until the packing station's bounding box touches the bottom of the screen
+		# If collect then -> DROP_ITEM otherwise LOST_OUTSIDE_AISLE
+		return cls.current_state, debug_img
+
+
+
+	@classmethod
+	def DROP_ITEM_start(cls):
+		pass
+	
+	@classmethod
+	def DROP_ITEM_update(cls, delta, debug_img, visout):
+		# Forward, drop, backwards, turn, forwards, -> LOST_OUTSIDE_AISLE
+		return cls.current_state, debug_img
+
+
+	#endregion
+
+
+	#region OLD State Callbacks
+	# @classmethod
+	# def lost_start(cls):
+	# 	print("Lost!")
+
+	# @classmethod
+	# def lost_update(cls,delta, debug_img, *args):
+	# 	return STATE.WANDER, debug_img
+
+	# @classmethod
+	# def wander_start(cls):
+	# 	pass
+
+
+	# @classmethod
+	# def wander_update(cls, delta, debug_img, visout):
+		
+	# 	if visout.marker_distance is not None and abs(visout.marker_bearing) < 0.8 and visout.aisle == cls.target_aisle:
+	# 		cls.wander_until_distance = None
+	# 		return STATE.AISLE_DOWN, debug_img
+
+	# 	points = VisionModule.combine_contour_points(visout.contours, False)
+	# 	points = VisionModule.handle_outer_contour(points)
+	# 	points, projected_floor = VisionModule.project_and_filter_contour(points)
+
+
+	# 	dist_map = None
+	# 	if points is not None and points.shape[0] > 3:
+	
+	# 		dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
+		
+	# 		if debug_img is not None:
+	# 			# draw
+	# 			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
+	# 			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+		
+	# 		dist_map = cls.forced_avoidance(dist_map)
+
+	# 		if debug_img is not None:
+	# 			if cls.avoid_left > 0:
+	# 				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
+	# 			if cls.avoid_right > 0:
+	# 				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+
+	# 		safety_map = cls.expand_safety(dist_map)
+			
+	# 		if debug_img is not None:
+	# 			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+
+
+	# 		if abs(safety_map.max() - safety_map.min()) < 0.01:
+	# 			# no safe path- turn and dont move forward
+				
+	# 			goal_error = (dist_map[:,0].argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
+	# 			rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
+
+	# 			#forward_vel = MAX_ROBOT_VEL * (1.0 - ROTATIONAL_BIAS*abs(rotational_vel)/MAX_ROBOT_ROT)
+	# 			forward_vel = 0
+
+	# 			if debug_img is not None:
+	# 				debug_img = cv2.drawMarker(debug_img, (dist_map[:,0].argmax(), int(SCREEN_HEIGHT - dist_map[:,0].max()/2 * SCREEN_HEIGHT)), (0,0,255), cv2.MARKER_STAR, 10)
+
+	# 			if abs(goal_error) < 0.05: #radians
+	# 				print("Probably stuck")
+	# 				cls.wander_until_distance = None
+	# 				return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
+				
+	# 		else:
+	# 			# move into the longest safe path
+	# 			goal_error = (safety_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
+	# 			rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
+	# 			forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+
+	# 			if debug_img is not None:
+	# 				debug_img = cv2.drawMarker(debug_img, (safety_map.argmax(), int(SCREEN_HEIGHT - safety_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+
+
+	# 		if hasattr(cls, 'wander_until_distance') and cls.wander_until_distance is not None and dist_map[:, 0].max() < cls.wander_until_distance:
+	# 			print(f"We wandered until {dist_map[:, 0].max()} < {cls.wander_until_distance}")
+	# 			cls.wander_until_distance = None
+	# 			return cls.next_state, debug_img
+				
+	# 	else:
+	# 		cls.forced_avoidance(None)
+	# 		rotational_vel = cls.MAX_ROBOT_ROT
+	# 		forward_vel = 0
+
+		
+	# 	cls.set_velocity(forward_vel,rotational_vel, delta)
+
+
+	# 	return STATE.WANDER, debug_img
+	
+	# @classmethod
+	# def fafo_start(cls):
+	# 	if not hasattr(cls, 'fafo_react_marker'):
+	# 		cls.fafo_react_marker = False
+
+	# @classmethod
+	# def fafo_update(cls, delta, debug_img, visout):
+	# 	# Aisle 1: rotate right until we cant see shelf then change to wander to continue rotating right until we see a shelf
+	# 	# Aisle 2: rotate right until we cant see shelf then change to wander to continue rotating right until we see a shelf and move forward until we are 1m away then switch back to fafo
+	# 	# Aisle 3: rotate until we see a marker
+
+	# 	if cls.fafo_react_marker and visout.aisle is not None and visout.aisle == cls.target_aisle:
+	# 		return STATE.AISLE_DOWN, debug_img
+
+
+	# 	if cls.target_aisle == 1:
+	# 		if visout.detected_shelves is not None:
+	# 			cls.set_velocity(0, cls.MAX_ROBOT_ROT, delta)
+	# 		else:
+	# 			# Wander until we get stuck
+	# 			cls.fafo_react_marker = True # When we get stuck we go to fafo then we should find the marker
+	# 			return STATE.WANDER, debug_img
+	# 	elif cls.target_aisle == 2:
+	# 		if visout.detected_shelves is not None:
+	# 			cls.set_velocity(0, cls.MAX_ROBOT_ROT, delta)
+	# 		else:
+	# 			# Wander until we are that far from furthest point
+	# 			cls.fafo_react_marker = True # When we get back to fafo then we should find the marker
+	# 			cls.wander_until_distance = 1.3 # "metres"
+	# 			cls.next_state = STATE.FIND_AISLE_FROM_OUTSIDE
+	# 			return STATE.WANDER, debug_img
+				
+	# 	elif cls.target_aisle == 3:
+	# 		if visout.aisle is None or visout.aisle < 1:
+	# 			cls.set_velocity(0, -cls.MAX_ROBOT_ROT, delta)
+	# 		else:
+	# 			return STATE.AISLE_DOWN, debug_img
+	# 	else:
+	# 		print("Target Aisle out of bounds")
+
+	# 	return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
+
+	# @classmethod
+	# def aisle_down_start(cls):
+	# 	pass
+		
+
+	# @classmethod
+	# def aisle_down_update(cls, delta, debug_img, visout):
+
+
+	# 	if visout.marker_distance is None:
+	# 		return STATE.LOST, debug_img
+		
+	# 	if cls.target_bay < 3 and visout.marker_distance < cls.target_bay_distance:
+	# 		return STATE.FACE_BAY, debug_img
+	# 	elif cls.target_bay == 3 and visout.marker_distance < (cls.target_bay_distance + cls.bay_width):
+	# 		return STATE.AISLE_DOWN_BAY3, debug_img
+
+	# 	if visout.aisle > cls.target_aisle:
+	# 		# Go back to fafo if we can see MORE markers than we should.
+	# 		# If we can see less markers the markers could be occluded
+	# 		return STATE.FIND_AISLE_FROM_OUTSIDE, debug_img
+		
+
+	# 	points = VisionModule.combine_contour_points(visout.contours, False)
+	# 	points = VisionModule.handle_outer_contour(points)
+	# 	points, projected_floor = VisionModule.project_and_filter_contour(points)
+	# 	dist_map = None
+	# 	if points is not None and points.shape[0] > 3:
+			
+	# 		dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
+
+	# 		if debug_img is not None:
+	# 			# draw
+	# 			cv2.polylines(debug_img, [points[:, 0:2].astype(np.int32)], False, (0, 0, 255), 1) # draw
+	# 			cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+		
+	# 		dist_map = cls.forced_avoidance(dist_map)
+			
+	# 		if debug_img is not None:
+	# 			if cls.avoid_left > 0:
+	# 				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
+	# 			if cls.avoid_right > 0:
+	# 				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
+
+	# 		safety_map = cls.expand_safety(dist_map)
+	# 		# repulsive_map = (safety_map < 0.3)*1
+
+	# 		attractive_map = np.zeros(safety_map.size)
+	# 		for i in range(safety_map.size):
+	# 			bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
+	# 			attractive_map[i] = 1.0 - 0.6 * abs(bearing - visout.marker_bearing)
+			
+	# 		if debug_img is not None:
+	# 			debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
+
+	# 		if abs(safety_map.min() - safety_map.max()) < 0.01:
+	# 			cls.forced_avoidance_start() #reset FA
+	# 			forward_vel = -cls.MAX_ROBOT_VEL/2
+	# 			rotational_vel = 0
+	# 		else:
+	# 			potential_map = attractive_map + safety_map
+
+	# 			if debug_img is not None:
+	# 				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+	# 				debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
 				
 
-				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
-				rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
-				forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+	# 			goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
+	# 			rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
+	# 			forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
 
 			
 			
-			cls.set_velocity(forward_vel,rotational_vel, delta)
-		else:
-			return STATE.LOST, debug_img
+	# 		cls.set_velocity(forward_vel,rotational_vel, delta)
+	# 	else:
+	# 		return STATE.LOST, debug_img
 		
 
-		return STATE.AISLE_DOWN, debug_img
+	# 	return STATE.AISLE_DOWN, debug_img
 	
-	@classmethod
-	def adb3_start(cls):
-		cls.adb3_remaining = cls.bay_width/100 # cm to m
-		cls.set_velocity(0,0,0)
+	# @classmethod
+	# def adb3_start(cls):
+	# 	cls.adb3_remaining = cls.bay_width/100 # cm to m
+	# 	cls.set_velocity(0,0,0)
 
-	@classmethod
-	def adb3_update(cls, delta, debug_img, visout):
+	# @classmethod
+	# def adb3_update(cls, delta, debug_img, visout):
 
-		if visout.marker_bearing is not None:
-			goal_error = visout.marker_bearing
-			rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
-			forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
-		else:
-			forward_vel = cls.MAX_ROBOT_VEL
-			rotational_vel = 0
+	# 	if visout.marker_bearing is not None:
+	# 		goal_error = visout.marker_bearing
+	# 		rotational_vel = max(min(goal_error*cls.Kp, cls.MAX_ROBOT_ROT), -cls.MAX_ROBOT_ROT)
+	# 		forward_vel = cls.MAX_ROBOT_VEL * (1.0 - cls.ROTATIONAL_BIAS*abs(rotational_vel)/cls.MAX_ROBOT_ROT)
+	# 	else:
+	# 		forward_vel = cls.MAX_ROBOT_VEL
+	# 		rotational_vel = 0
 		
-		cls.set_velocity(forward_vel, rotational_vel, delta)
+	# 	cls.set_velocity(forward_vel, rotational_vel, delta)
 
-		cls.adb3_remaining -= forward_vel*delta
-		if cls.adb3_remaining <= 0:
-			return STATE.FACE_BAY, debug_img
+	# 	cls.adb3_remaining -= forward_vel*delta
+	# 	if cls.adb3_remaining <= 0:
+	# 		return STATE.FACE_BAY, debug_img
 
 
-		return STATE.AISLE_DOWN_BAY3, debug_img
+	# 	return STATE.AISLE_DOWN_BAY3, debug_img
 
-	@classmethod
-	def face_bay_start(cls):
-		cls.turn_to_bay_remaining = pi/2
-		cls.set_velocity(0,0, 0)
+	# @classmethod
+	# def face_bay_start(cls):
+	# 	cls.turn_to_bay_remaining = pi/2
+	# 	cls.set_velocity(0,0, 0)
 	
-	@classmethod
-	def face_bay_update(cls, delta, debug_img, visout):
+	# @classmethod
+	# def face_bay_update(cls, delta, debug_img, visout):
 		
-		rot = 0.35
+	# 	rot = 0.35
 		
-		cls.turn_to_bay_remaining -= rot*delta
-		if cls.turn_to_bay_remaining <= 0:
-			return STATE.COLLECT_ITEM, debug_img
+	# 	cls.turn_to_bay_remaining -= rot*delta
+	# 	if cls.turn_to_bay_remaining <= 0:
+	# 		return STATE.COLLECT_ITEM, debug_img
 
-		if cls.target_side == "Left":
-			rot = -rot
-		cls.set_velocity(0, rot, delta)
+	# 	if cls.target_side == "Left":
+	# 		rot = -rot
+	# 	cls.set_velocity(0, rot, delta)
 
-		return STATE.FACE_BAY, debug_img
+	# 	return STATE.FACE_BAY, debug_img
 
 
-	@classmethod
-	def collect_item_start(cls):
-		cls.set_velocity(cls.MAX_ROBOT_VEL/2,0, 0)
-		cls.collect_item_fwd_remaining = 0.06
+	# @classmethod
+	# def collect_item_start(cls):
+	# 	cls.set_velocity(cls.MAX_ROBOT_VEL/2,0, 0)
+	# 	cls.collect_item_fwd_remaining = 0.06
 	
-	@classmethod
-	def collect_item_update(cls, delta, debug_img, visout):
-		if cls.collect_item_fwd_remaining > 0:
-			fwd = cls.MAX_ROBOT_VEL/2
-			cls.set_velocity(fwd,0,delta)
-			cls.collect_item_fwd_remaining -= fwd*delta
-		else:
-			cls.set_velocity(0,0,delta)
-			# ItemCollectionModule.gripper_close(1)
+	# @classmethod
+	# def collect_item_update(cls, delta, debug_img, visout):
+	# 	if cls.collect_item_fwd_remaining > 0:
+	# 		fwd = cls.MAX_ROBOT_VEL/2
+	# 		cls.set_velocity(fwd,0,delta)
+	# 		cls.collect_item_fwd_remaining -= fwd*delta
+	# 	else:
+	# 		cls.set_velocity(0,0,delta)
+	# 		# ItemCollectionModule.gripper_close(1)
 
 
-		return STATE.COLLECT_ITEM, debug_img
+	# 	return STATE.COLLECT_ITEM, debug_img
 	
 	#endregion

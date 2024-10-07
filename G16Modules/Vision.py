@@ -388,6 +388,7 @@ class VisionModule:
 		distance = []
 		bearing = []
 		centers = []
+		radii = []
 
 		for contours in ContoursMarkers:
 			if cv2.contourArea(contours) > 100:
@@ -415,15 +416,44 @@ class VisionModule:
 					distance.append(MarkerDistance)
 					bearing.append(MarkerAngle)
 					centers.append(center)
+					radii.append(radius)
 
 		# Calculate the average center if there are any centers
 		if centers:
 			avg_x = sum([c[0] for c in centers]) / len(centers)
 			avg_y = sum([c[1] for c in centers]) / len(centers)
+			avg_radius = sum(radii) / len(radii)
 			avg_center = (int(avg_x), int(avg_y))
 			avg_distance = sum(distance) / len(distance)
 			avg_bearing = sum(bearing) / len(bearing)
 			shape_count = len(centers)
+
+			if abs(avg_bearing) > FOV_HORIZONTAL/2 * 0.75:
+				# Too close to edge of screen
+				# Don't trust the aisle number
+				shape_count = 0
+			
+			if shape_count == 1:
+				# Should ignore aisle number if it is obstructed at all
+				# or even if its too close to a shelf
+				pass
+			elif shape_count == 2:
+				# Too far apart
+				if ([(x-avg_center[0])**2+(y-avg_center[1])**2 for x, y in centers] > (5 * avg_radius)**2).any():
+					avg_center = None
+					avg_bearing = None
+					avg_distance = None
+					shape_count = 0
+				if ([radius - avg_radius for radius in centers] > (avg_radius)**2).any():
+					avg_center = None
+					avg_bearing = None
+					avg_distance = None
+					shape_count = 0
+				if abs(centers[0][1] - centers[1][1]) > 25:
+					shape_count = 0
+			elif shape_count == 3:
+				pass
+
 
 			if draw:
 				cv2.drawMarker(robotview, avg_center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
@@ -445,7 +475,7 @@ class VisionModule:
 	@classmethod # Formerly GetContoursShelf. Input: Shelf contours. Output: shelf center (not distance/bearing)
 	def ProcessContoursShelf(cls, contours, output, colour, text, Draw=True):
 		detected = False
-		center = (0, 0)
+		centers = []
 		radius = 0
 		for contour in contours:
 			if cv2.contourArea(contour) > 1000:
@@ -464,11 +494,12 @@ class VisionModule:
 					cv2.putText(output, text, center, 
 								cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 					
+				centers.append(center)
 				detected = True
 				# If you want to calculate a bounding box
 
 		if detected:
-			return center
+			return centers
 		else:
 			return None
 		

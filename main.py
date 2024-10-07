@@ -3,7 +3,7 @@ import numpy as np
 import time
 from G16Modules.Globals import *
 from G16Modules.Vision import VisionModule
-from G16Modules.NavigationGlobal import NavigationModule, STATE
+from G16Modules.Navigation import NavigationModule, STATE
 import VisionSub.csvread as csvread
 
 
@@ -20,7 +20,7 @@ def main(): # Main function
 		instruction = instructions[3] # 1 2 4
 		
 		VisionModule.calculate_projection_transform()
-		NavigationModule.init(STATE.FIND_AISLE_FROM_OUTSIDE, instruction) # Temp start = wander for debugging. normally it should be find_aisle_from_outside 
+		NavigationModule.init(STATE.LOST, instruction)
 		t1 = time.time()
 
 		pipeline = 'nav'

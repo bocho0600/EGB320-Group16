@@ -14,6 +14,7 @@ class PathProcess:
     rot = 0
     fwdlen = None
     rotlen = None
+    completed = True
 
     @classmethod
     def motorLoop(cls):
@@ -55,11 +56,13 @@ class PathProcess:
             cls.rot = 0
             cls.fwdlen = None
             cls.rotlen = None
+            cls.completed = True
 
     @classmethod
     def new_path(cls, newpath):
         cls.path = newpath.copy()
         cls.seg = 0
+        cls.completed = False
         cls.next_seg(False)
         Specific.set_velocity(cls.fwd, cls.rot)
 
