@@ -33,21 +33,7 @@ def main():
                   # Get the detected shelf centers
                   ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "S", Draw=True)
                   ShelfCenter, ShelfBearing = vision.GetInfoShelf(RobotView, ShelfCenters, imgRGB)
-                  closest_point = None
-                  max_y = -1
-
-                  # Iterate through each contour
-                  for contour in contoursShelf:
-                        for point in contour:
-                              x, y = point[0]  # Each point is a nested array, so extract x and y
-                              if y > max_y:    # If this point is closer to the bottom
-                                    max_y = y    # Update max_y to the current point's y
-                                    closest_point = (x, y)  # Save the point
-                  if closest_point:
-                        cv2.circle(RobotView, closest_point, 5, (0, 0, 255), -1)  # Red circle with radius 5
-                        pred_point = cv2.perspectiveTransform(np.float32(closest_point).reshape(-1,1,2), homography_matrix)
-                        real_points = 100 + pred_point[0][0][1]
-                        print(real_points)
+  
 
                   contoursLoadingBay, LoadingBayMask = vision.findLoadingArea(imgHSV)
                   LoadingBayCenters = vision.GetContoursShelf(contoursLoadingBay, RobotView, (0, 255, 0), "L", Draw=True)
@@ -65,10 +51,15 @@ def main():
 
 
                   
-                  WallRGB,  WallImgGray, WallMask,contoursWall1 = vision.findWall(imgHSV,imgRGB)
+                  WallRGB,  WallImgGray, WallMask,contoursWall1, GrayScale_Image = vision.findWall(imgHSV,imgRGB)
                   ContoursMarkers, mask1 = vision.findMarkers(WallImgGray, WallMask)
                   avg_center, avg_bearing, avg_distance, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
+                  
 
+                  # gray = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY)
+                  # ret, WM = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
+                  # inverted_loading_bay_mask = cv2.bitwise_not(LoadingBayMask)
+                  # masked_wall = cv2.bitwise_and(WM, inverted_loading_bay_mask)
 
                   cam.DisplayFrame(frame_id, FPS=True, frame=RobotView, frame1 = WallMask) # Display the frame with the detected objects.
                   # Break the loop if 'q' is pressed

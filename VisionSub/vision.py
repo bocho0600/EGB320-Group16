@@ -11,6 +11,9 @@ import multiprocessing as mp
 # Email: minhnguyen.le@qut.edu.au
 
 class VisionModule:
+    ground_points = np.float32([[-18,47],[18,47],[-18,150],[18,150]]) #off-set in cm
+    homography_matrix = np.array([[-2.11252555e-02,  6.33812791e-03,  7.01814123e+00],[ 1.80590083e-04, -8.03575074e-03, -1.43661305e+01]
+    ,[ 2.56484473e-05, -4.57580665e-03,  1.00000000e+00]])
     color_ranges = {
         #'wall': (np.array([34, 0, 211]), np.array([45, 74, 255])),
         'wall': (np.array([33, 0, 0]), np.array([41, 62, 255])),
@@ -97,8 +100,10 @@ class VisionModule:
 
     def findWall(self, imgHSV, imgRGB):
         # Create masks for the orange color (wall detection)
-        WallMask = cv2.inRange(imgHSV, self.color_ranges['wall'][0], self.color_ranges['wall'][1])
-        
+        gray = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY)
+        ret, WallMask = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
+        #WallMask = cv2.inRange(imgHSV, self.color_ranges['wall'][0], self.color_ranges['wall'][1])
+
         # Find contours in the mask
         contoursWall1, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
@@ -108,7 +113,7 @@ class VisionModule:
             largest_contour = max(contoursWall1, key=cv2.contourArea)
             
             # Calculate the convex hull of the largest contour
-            hull = cv2.convexHull(largest_contour)
+            #hull = cv2.convexHull(largest_contour)
             
             # Create an empty mask and draw the convex hull on it
             filledWallMask = np.zeros_like(WallMask)
@@ -128,7 +133,7 @@ class VisionModule:
             WallImgGray = np.zeros_like(cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY))
             filledWallMask = np.zeros_like(WallMask)
 
-        return WallImg, WallImgGray, filledWallMask, contoursWall1
+        return WallImg, WallImgGray, filledWallMask, contoursWall1,gray
 
 
 
@@ -228,6 +233,8 @@ class VisionModule:
         
     def GetContoursShelf(self, contours, output, colour, text, Draw=True, min_area=1000):
         detected_centers = []  # List to store the centers of detected shelves
+        closest_point = None
+        max_y = -1  # Variable to track the point closest to the bottom edge
         
         for contour in contours:
             if cv2.contourArea(contour) > min_area:
@@ -241,18 +248,43 @@ class VisionModule:
                 if Draw:
                     # Draw the contour
                     cv2.drawContours(output, [contour], -1, colour, 1)
-                    
+
                     # Draw the text at the center of the contour
                     cv2.putText(output, text, center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 
                 # Store the detected center
                 detected_centers.append(center)
 
+                # Find the point closest to the bottom edge within the current contour
+                for point in contour:
+                    x, y = point[0]  # Extract x and y from the point
+                    if y > max_y:  # If this point is closer to the bottom
+                        max_y = y  # Update max_y to the current point's y
+                        closest_point = (x, y)  # Save the closest point
+
+        # Draw the closest point to the bottom edge, if found
+        if closest_point:
+            pred_point = cv2.perspectiveTransform(np.float32(closest_point).reshape(-1,1,2), self.homography_matrix)
+            real_points = int(100 + pred_point[0][0][1])
+            #print(real_points)
+            # Draw the point closest to the bottom edge as a red circle
+            if Draw:
+                # Draw the closest point as a red circle
+                cv2.circle(output, closest_point, 5, (0, 0, 255), -1)  # Red circle with radius 5
+
+                # Add text showing the distance next to the dot (closest_point)
+                distance_text = f"{real_points:.2f} cm"  # Format the distance to two decimal places
+                cv2.putText(output, distance_text, (closest_point[0] + 10, closest_point[1] - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+                
+
         # Return the list of detected centers, or None if no contours are detected
         if detected_centers:
             return detected_centers
         else:
             return None
+
 
     def GetContoursMarkers(self, contours, output, colour, text, Draw=True, min_area=1000):
         detected_centers = []  # List to store the centers of detected shelves
