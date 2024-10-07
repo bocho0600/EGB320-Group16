@@ -8,6 +8,9 @@ import RP2040 as rp
 
 # Servo S3 is 6 kg/cm3
 # Servo S2 is 3 kg/cm3
+ground_points = np.float32([[-18,47],[18,47],[-18,150],[18,150]]) #off-set in cm
+homography_matrix = np.array([[-2.11252555e-02,  6.33812791e-03,  7.01814123e+00],[ 1.80590083e-04, -8.03575074e-03, -1.43661305e+01]
+ ,[ 2.56484473e-05, -4.57580665e-03,  1.00000000e+00]])
 
 def main():
       i2c = rp.I2C()
@@ -30,20 +33,21 @@ def main():
                   # Get the detected shelf centers
                   ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "S", Draw=True)
                   ShelfCenter, ShelfBearing = vision.GetInfoShelf(RobotView, ShelfCenters, imgRGB)
-                  # if contoursShelf:
-                  #       points = VisionModule.combine_contour_points(contoursShelf, False)
-                  #       points, projected_floor = VisionModule.project_and_filter_contour(points)
-                  #       if points is not None and points.shape[0] > 3:
-                  #             dist_map = VisionModule.get_dist_map(points, projected_floor)
-                  #             closest_idx = np.argmin(dist_map[:,0])
-                  #             points_index = np.argmax(points[:, 0] >= closest_idx)
-                  #             closest_shelf_dist = dist_map[closest_idx, 0] * 100
-                  #             closest_point_x = points[points_index, 0]
-                  #             closest_point_y = points[points_index, 1]
-                  #             cv2.drawMarker(RobotView, (closest_point_x, closest_point_x), (0, 255, 0), markerType=cv2.MARKER_TILTED_CROSS, markerSize=20, thickness=1)
-                  #             cv2.putText(RobotView,  f"D: {int(closest_shelf_dist)}", (closest_point_x, closest_point_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+                  closest_point = None
+                  max_y = -1
 
-
+                  # Iterate through each contour
+                  for contour in contoursShelf:
+                        for point in contour:
+                              x, y = point[0]  # Each point is a nested array, so extract x and y
+                              if y > max_y:    # If this point is closer to the bottom
+                                    max_y = y    # Update max_y to the current point's y
+                                    closest_point = (x, y)  # Save the point
+                  if closest_point:
+                        cv2.circle(RobotView, closest_point, 5, (0, 0, 255), -1)  # Red circle with radius 5
+                        pred_point = cv2.perspectiveTransform(np.float32(closest_point).reshape(-1,1,2), homography_matrix)
+                        real_points = 100 + pred_point[0][0][1]
+                        print(real_points)
 
                   contoursLoadingBay, LoadingBayMask = vision.findLoadingArea(imgHSV)
                   LoadingBayCenters = vision.GetContoursShelf(contoursLoadingBay, RobotView, (0, 255, 0), "L", Draw=True)

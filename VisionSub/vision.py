@@ -13,7 +13,7 @@ import multiprocessing as mp
 class VisionModule:
     color_ranges = {
         #'wall': (np.array([34, 0, 211]), np.array([45, 74, 255])),
-        'wall': (np.array([24, 25, 175]), np.array([39, 105, 255])),
+        'wall': (np.array([33, 0, 0]), np.array([41, 62, 255])),
         'floor': (np.array([0, 0, 0]), np.array([179, 255, 255])),
         'yellow': (np.array([25, 108, 224]), np.array([33, 255, 255])),
         'blue': (np.array([81, 0, 0]), np.array([116, 255, 255])),
