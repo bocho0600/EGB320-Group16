@@ -10,7 +10,7 @@ class VideoSpecific:
 	# update
 	# stop
 
-    video_path = 'VisionSub/videos/rec2.h264'
+    video_path = 'VisionSub/videos/rec4.h264'
 
     @classmethod
     def get_image(cls):
@@ -20,6 +20,7 @@ class VideoSpecific:
             cls.cap = cv2.VideoCapture(cls.video_path)
             ret, img = cls.cap.read()
     
+        img = cv2.rotate(img, cv2.ROTATE_180)
         img = cv2.resize(img, (SCREEN_WIDTH, SCREEN_HEIGHT), cv2.INTER_NEAREST)
         imgHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         robotview = img #.copy()

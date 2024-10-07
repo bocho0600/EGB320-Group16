@@ -199,7 +199,7 @@ class VisionModule:
 
 		# Detect shelves in the HSV image
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
-		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
+		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 		contoursLoadingArea, LoadingAreaMask = cls.findLoadingArea(imgHSV)
 
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
@@ -227,8 +227,8 @@ class VisionModule:
 		img, imgHSV, robotview = Specific.get_image()
 
 		# Detect shelves in the HSV image
-		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
-		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, cv2.CHAIN_APPROX_NONE)
+		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 100, cv2.CHAIN_APPROX_NONE)
+		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 		contoursLoadingArea, LoadingAreaMask = cls.findLoadingArea(imgHSV)
 
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
@@ -307,7 +307,7 @@ class VisionModule:
 		return contoursItem, ItemMask
 
 	@classmethod
-	def findShelf(cls, imgHSV, area_threshold=10000, chain=cv2.CHAIN_APPROX_SIMPLE):
+	def findShelf(cls, imgHSV, area_threshold=100, chain=cv2.CHAIN_APPROX_SIMPLE):
 		# Create a mask for the blue color range
 		ShelfMask = cv2.inRange(imgHSV, cls.color_ranges['blue'][0], cls.color_ranges['blue'][1])
 		
@@ -315,7 +315,7 @@ class VisionModule:
 		contoursShelf, _ = cv2.findContours(ShelfMask, cv2.RETR_EXTERNAL,chain)
 		
 		# Filter out small contours by area
-		#filtered_contours = [cnt for cnt in contoursShelf if cv2.contourArea(cnt) > area_threshold]
+		contoursShelf = [cnt for cnt in contoursShelf if cv2.contourArea(cnt) > area_threshold]
 		
 		return contoursShelf, ShelfMask
 
@@ -326,9 +326,13 @@ class VisionModule:
 		return contoursLoadingArea, LoadingAreaMask
 
 	@classmethod
-	def findObstacle(cls, imgHSV, chain=cv2.CHAIN_APPROX_SIMPLE):
+	def findObstacle(cls, imgHSV, area_threshold=100, chain=cv2.CHAIN_APPROX_SIMPLE):
 		ObstacleMask = cv2.inRange(imgHSV, cls.color_ranges['green'][0], cls.color_ranges['green'][1])
 		contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, chain)
+
+		# Filter out small contours by area
+		contoursObstacle = [cnt for cnt in contoursObstacle if cv2.contourArea(cnt) > area_threshold]
+
 		return contoursObstacle, ObstacleMask
 	
 	@classmethod

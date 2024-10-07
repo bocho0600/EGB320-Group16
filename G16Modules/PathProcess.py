@@ -38,7 +38,7 @@ class PathProcess:
                 cls.next_seg()
             
             Specific.set_velocity(cls.fwd, cls.rot)
-            print(f"{cls.fwd:.2f}, {cls.rot:.2f}")
+            # print(f"{cls.fwd:.2f}, {cls.rot:.2f}")
 
             time.sleep(0.01) # ~ 100 Hz
             # print(f"Motorloop {1.0/delta:.2f} fps")
