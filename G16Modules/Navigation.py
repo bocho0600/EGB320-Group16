@@ -40,7 +40,7 @@ class NavigationModule:
 	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
 	MAX_ROBOT_ROT = pi/6 # rad/s
-	RADIUS = 0.15 # how far to stay away from wall
+	RADIUS = 0.22 # how far to stay away from wall
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):
@@ -280,7 +280,7 @@ class NavigationModule:
 			cls.avoid_left -= fwd * delta
 
 	@classmethod
-	def move_into_path(cls, target_bearing, debug_img, contours, handle_outer=True, force_forward=False):
+	def move_into_path(cls, target_bearing, debug_img, contours, handle_outer=True, force_forward=False, safety_thresh=None, avoid_bearing = None):
 		# Todo implement this as an funciton to do all the shelf/obstacle contour point processing and avoidance
 		# We might want to move towards the marker if visible, or track the marker from where we last saw it??
 		# Or an esimated entry point
@@ -299,6 +299,10 @@ class NavigationModule:
 			# Dist map processing
 			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
 			dist_map = cls.forced_avoidance(dist_map)
+
+			if avoid_bearing is not None:
+				dist_map[int(avoid_bearing*SCREEN_WIDTH/FOV_HORIZONTAL - SCREEN_WIDTH/2)] = 0.3
+
 			safety_map = NavigationModule.expand_safety(dist_map)
 			
 
@@ -312,16 +316,12 @@ class NavigationModule:
 			# Target
 			# If target is none go longest
 			attractive_map = np.zeros(safety_map.size)
-			if target_bearing == 'longest':
-				pass
-			elif target_bearing == 'left':
-				pass
-			elif target_bearing == 'right':
+			if type(target_bearing) == str and target_bearing == 'longest':
 				pass
 			else:
 				for i in range(safety_map.size):
 					bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
-					attractive_map[i] = 0.5 - 0.2 * abs(bearing - target_bearing)
+					attractive_map[i] = 0.5 - 0.1 * abs(bearing - target_bearing)
 			
 			# if debug_img is not None:
 			# 	debug_img = cv2.drawContours(debug_img, contours, -1, (0,0,255),2)
@@ -345,9 +345,13 @@ class NavigationModule:
 						debug_img = cv2.drawMarker(debug_img, (int(target_bearing*SCREEN_WIDTH/FOV_HORIZONTAL+SCREEN_WIDTH/2), SCREEN_HEIGHT//2), (0,255,255), cv2.MARKER_STAR, 10)
 			else:
 				# Move into highest potential
+				if safety_thresh is not None:
+					safety_map[safety_map < safety_thresh] = 0.0
+					safety_map[safety_map >= safety_thresh] = 1.0
+
 				potential_map = attractive_map + safety_map
 				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
-				path_distance = dist_map[potential_map.argmax(),0]
+				path_distance = max(dist_map[:,0])
 				forward_vel, rotational_vel = calculate_fwd_rot(goal_error)
 
 				if debug_img is not None:
@@ -421,20 +425,15 @@ class NavigationModule:
 	@classmethod
 	def LOST_OUTSIDE_AISLE_start(cls):
 		if cls.current_phase == PHASE.COLLECT:
-			if hasattr(cls,'fa2_flag') and cls.fa2_flag:
-				# In this case we came back from face_aisle_2 
-				cls.set_velocity(0,0)
-				cls.fa2_flag = False
-				cls.found_entry_point = True
-			else: # if we're going to aisle, find (estimate) entry point
-				cls.found_entry_point = False
-				cls.at_entry_point = False
-				if cls.target_aisle == 1:
-					cls.set_velocity(0, cls.MAX_ROBOT_ROT)
-				elif cls.target_aisle == 2:
-					cls.set_velocity(0, cls.MAX_ROBOT_ROT)
-				elif cls.target_aisle == 3:
-					cls.set_velocity(0, -cls.MAX_ROBOT_ROT)
+			# if we're going to aisle, find (estimate) entry point
+			cls.found_entry_point = False
+			cls.at_entry_point = False
+			if cls.target_aisle == 1:
+				cls.set_velocity(0, cls.MAX_ROBOT_ROT)
+			elif cls.target_aisle == 2:
+				cls.set_velocity(0, cls.MAX_ROBOT_ROT)
+			elif cls.target_aisle == 3:
+				cls.set_velocity(0, -cls.MAX_ROBOT_ROT)
 		elif cls.current_phase == PHASE.DROPOFF:
 			# if we're going to packing station, go there
 			# (face it then -> APPROACH_PACKING)
@@ -444,22 +443,53 @@ class NavigationModule:
 	def LOST_OUTSIDE_AISLE_update(cls, delta, debug_img, visout):
 		if cls.current_phase == PHASE.COLLECT:
 			# if we're going to aisle, find (estimate) entry point
-			if visout.aisle == cls.target_aisle and not cls.checkContour(visout.contoursLoadingArea):
-				return STATE.AISLE_DOWN, debug_img
+			# if not cls.at_entry_point and visout.aisle == cls.target_aisle and not cls.checkContour(visout.contoursLoadingArea):
+			# 	return STATE.AISLE_DOWN, debug_img
 			
 			if not cls.found_entry_point:
-				if ((cls.target_aisle == 1 or cls.target_aisle == 3) and visout.detected_shelves is not None):# or\
-					#((cls.target_aisle == 2) and visout.detected_shelves is not None and abs(sum((shelf[0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH for shelf in visout.detected_shelves)/len(visout.detected_shelves)) < 10*pi/180):
+				if ((cls.target_aisle == 1 or cls.target_aisle == 3) and visout.detected_shelves is not None) or\
+					((cls.target_aisle == 2) and visout.detected_shelves is not None):# and abs(sum((shelf[0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH for shelf in visout.detected_shelves)/len(visout.detected_shelves)) < 10*pi/180):
 					print("Found entry point")
 					cls.found_entry_point = True
 				elif cls.target_aisle == 2 and visout.detected_shelves is None:
 					return STATE.FACE_AISLE_2, debug_img
 
-			if cls.found_entry_point and not cls.at_entry_point:	
-				fwd, rot, distance = cls.move_into_path('longest', debug_img, visout.contours) # target=None is longest path
-				if (cls.target_aisle == 1 and distance < 0.26) or\
-					(cls.target_aisle == 2 and distance < 1.2) or\
-					(cls.target_aisle == 3 and distance < 0.26):
+			if cls.found_entry_point and not cls.at_entry_point:
+				if not cls.checkContour(visout.contoursShelf):
+					print("Saw shelf but can't see it anymore")
+					cls.found_entry_point = False
+					if cls.target_aisle == 1:
+						cls.set_velocity(0, cls.MAX_ROBOT_ROT)
+					elif cls.target_aisle == 2:
+						cls.set_velocity(0, cls.MAX_ROBOT_ROT)
+					elif cls.target_aisle == 3:
+						cls.set_velocity(0, -cls.MAX_ROBOT_ROT)
+					return STATE.LOST_OUTSIDE_AISLE, debug_img
+
+				if cls.target_aisle == 1:
+					def get_left_side(cont):
+						x,y,w,h = cv2.boundingRect(cont.astype(np.int32))
+						return x
+					bearing = get_left_side(min(visout.contoursShelf, key=get_left_side)-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH
+					fwd, rot, distance = cls.move_into_path(bearing, debug_img, visout.contours) # target=None is longest path
+				elif cls.target_aisle == 2:
+					avoid_bearing = None
+					if visout.aisle > 0 and visout.aisle != cls.target_aisle:
+						avoid_bearing = visout.marker_bearing # don't go into the wrong aisle
+					fwd, rot, distance = cls.move_into_path('longest', debug_img, visout.contours, avoid_bearing=avoid_bearing) # target=None is longest path
+				elif cls.target_aisle == 3:
+					def get_right_side(cont):
+						x,y,w,h = cv2.boundingRect(cont.astype(np.int32))
+						return x+w
+					bearing = get_right_side(max(visout.contoursShelf, key=get_right_side)-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH
+					fwd, rot, distance = cls.move_into_path(bearing, debug_img, visout.contours) # target=None is longest path
+
+
+
+				
+				if distance is not None and ((cls.target_aisle == 1 and distance < 0.26) or\
+					(cls.target_aisle == 2 and distance < 1.0) or\
+					(cls.target_aisle == 3 and distance < 0.26)):
 					if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
 						# shelf is on the right
 						cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen=2*pi)
@@ -478,11 +508,13 @@ class NavigationModule:
 				# Note aisle_down might need the marker not to be obscured...
 				#if visout.marker_bearing is not None:
 				if visout.aisle == cls.target_aisle:
-					return STATE.AISLE_DOWN, debug_img
+					cls.next_state = STATE.AISLE_DOWN
+					cls.set_velocity(-cls.MAX_ROBOT_VEL, cls.MAX_ROBOT_ROT, rotlen=visout.marker_bearing)
+					return STATE.BLIND_MOVE, debug_img
 				elif visout.aisle > 0 and not cls.checkContour(visout.contoursLoadingArea):
 					# We can see a marker but not the right one
 
-					print("We're at the wrong aisle. ")
+					print(f"We're at the wrong aisle. (aisle {visout.aisle})")
 
 					# Go out of the aisle
 					cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen=pi)
@@ -528,6 +560,9 @@ class NavigationModule:
 		# stage 1: turn until we can see shelf and record time
 		# stage 2: turn until we can't see shelf and recird time
 		# stage 3: turn other way half of the time difference
+		if visout.aisle == cls.target_aisle:
+			return STATE.AISLE_DOWN, debug_img
+
 		if cls.fa2_stage == 0:
 			#cls.set_velocity(0, cls.MAX_ROBOT_ROT)
 			if visout.detected_shelves is None:
@@ -535,6 +570,11 @@ class NavigationModule:
 		elif cls.fa2_stage == 1:
 			#cls.set_velocity(0, cls.MAX_ROBOT_ROT)
 			if visout.detected_shelves is not None:
+				
+				points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
+				points, projected_floor = VisionModule.project_and_filter_contour(points)
+				cls.fa2_L1 = min(projected_floor[:, 0])
+
 				print("Left shelf side")
 				cls.fa2_t1 = time.time()
 				cls.fa2_stage += 1
@@ -543,14 +583,45 @@ class NavigationModule:
 			if visout.detected_shelves is None:
 				print("Right shelf side")
 				cls.fa2_t2 = time.time()
-				shelf_width = cls.fa2_t2 - cls.fa2_t1
-				cls.set_velocity(0, -cls.MAX_ROBOT_ROT, rotlen=cls.MAX_ROBOT_ROT * shelf_width/2)
+				shelf_width_seconds = cls.fa2_t2 - cls.fa2_t1
+
+				alpha = shelf_width_seconds * cls.MAX_ROBOT_ROT - FOV_HORIZONTAL
+				point = ((cls.fa2_L1 * sin(alpha))/2, (cls.fa2_L1 * cos(alpha) + cls.fa2_L2)/2)
+				gamma = np.arctan2(point[1], point[0])
+				cls.fa2_entrydist = np.sqrt(point[0]**2 + point[1]**2)
+
+				print(f"alpha = {alpha:.3f}, gamma = {gamma:.3f}, entry_dist = {cls.fa2_entrydist:.3f}")
+
+				cls.set_velocity(0, -cls.MAX_ROBOT_ROT, rotlen=gamma + FOV_HORIZONTAL/2)
 				cls.fa2_stage += 1
+			else:
+				points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
+				points, projected_floor = VisionModule.project_and_filter_contour(points)
+				if projected_floor is None or len(projected_floor) < 1:
+					pass
+				else:
+					cls.fa2_L2 = min(projected_floor[:, 0])
 		elif cls.fa2_stage == 3:
 			if PathProcess.completed:
 				print("Facing aisle 2")
-				cls.fa2_flag = True
-				return STATE.LOST_OUTSIDE_AISLE, debug_img
+				# fwd, rot, dist = cls.move_into_path(0, debug_img, visout.contours)
+				# cls.am_target_x = dist
+				# cls.am_target_y = 0
+				# cls.am_proximity_thresh = 0.15
+				# cls.am_traversed_thresh = dist
+				
+				# print(f"Entry dist {cls.fa2_entrydist:.2f}")
+				# cls.set_velocity(cls.MAX_ROBOT_VEL, 0, fwdlen=cls.fa2_entrydist)
+				# cls.next_state = STATE.LOST_OUTSIDE_AISLE
+				
+				if cls.fa2_L1 > cls.fa2_L2:
+					cls.set_velocity(0, -cls.MAX_ROBOT_ROT, rotlen=0.8*(cls.fa2_t2 - cls.fa2_t1) * cls.MAX_ROBOT_ROT-FOV_HORIZONTAL/2)
+					cls.next_state = STATE.LOST_OUTSIDE_AISLE
+					return STATE.BLIND_MOVE, debug_img
+				else:
+					cls.set_velocity(0, -cls.MAX_ROBOT_ROT, rotlen=pi/8)
+					cls.next_state = STATE.LOST_OUTSIDE_AISLE
+					return STATE.BLIND_MOVE, debug_img
 
 		return STATE.FACE_AISLE_2, debug_img
 
@@ -631,6 +702,21 @@ class NavigationModule:
 
 	@classmethod
 	def AVOID_MOVE_start(cls):
+		# our target should be given by a point x,y relative to our current position and heading
+		# x is distance in front and y is left-right
+		# we set our position in pathprocess to the negative of this and try to navigate towards 0
+		# can either terminate when estimated distance to the target is less than a threshold,
+		# or when the estimated traversed distance exceeds a threshold.
+
+		# PathProcess.localize(-cls.am_target_x,cls.am_target_y, 0)
+
+		# if not hasattr(cls, 'am_proximity_thresh'):
+		# 	cls.am_proximity_thresh = None
+		# if not hasattr(cls, 'am_traversed_thresh'):
+		# 	cls.am_traversed_thresh = None
+
+		cls.avoid_moved = 0
+
 		pass
 	
 	@classmethod
@@ -642,8 +728,33 @@ class NavigationModule:
 
 		# THis should also serve as our biased_move function to be able to move forward while turning left around the aisle. 
 
+		# x, y, h = PathProcess.get_current_track()
+
+		
+
+		# if cls.am_traversed_thresh is not None and (x+cls.am_target_x)**2+(y+cls.am_target_y)**2 >= cls.am_traversed_thresh:
+		# 	return cls.next_state, debug_img
+		# elif cls.am_proximity_thresh is not None and x**2+y**2 <= cls.am_proximity_thresh:
+		# 	return cls.next_state, debug_img
+		# else:
+		# 	bearing = - h - np.arctan2(-y, -x)
+		# 	cv2.drawMarker(debug_img, (int(bearing*SCREEN_WIDTH/FOV_HORIZONTAL + SCREEN_WIDTH/2), 200), (255,0,0), cv2.MARKER_DIAMOND, 12)
+
+		# 	print(f"{x:.3f}, {y:.3f}, {h:.3f}, {bearing:.3f}")
+
+		# 	fwd, rot, dist = cls.move_into_path(bearing, debug_img, visout.contours, handle_outer=True)
+
+		# 	cls.set_velocity(fwd, rot, rotlen=bearing)
+
+		fwd, rot, dist = cls.move_into_path('longest', debug_img, visout.contours)
+		cls.set_velocity(fwd,rot)
+
+		cls.avoid_moved += delta * fwd
+		if cls.avoid_moved >= cls.avoid_dist:
+			return cls.next_state, debug_img
 
 		return STATE.AVOID_MOVE, debug_img
+	
 
 
 	@classmethod
@@ -739,14 +850,14 @@ class NavigationModule:
 
 
 
-		if dist is None:
+		if visout.detected_shelves is None:
 			if cls.current_phase == PHASE.DROPOFF:
 				cls.next_state = STATE.APPROACH_PACKING
 
-				if cls.last_shelf_side is not None:
-					PathProcess.new_path([(0, -cls.MAX_ROBOT_ROT/2*np.sign(cls.last_shelf_side), None, pi/10), (cls.MAX_ROBOT_VEL/2, 0, 0.4, None)])
-				else:
-					cls.set_velocity(cls.MAX_ROBOT_VEL/2, 0, fwdlen=0.4)
+				# if cls.last_shelf_side is not None:
+				# 	PathProcess.new_path([(0, -cls.MAX_ROBOT_ROT/2*np.sign(cls.last_shelf_side), None, 0.23), (cls.MAX_ROBOT_VEL/2, 0, 0.4, None)])
+				# else:
+				cls.set_velocity(cls.MAX_ROBOT_VEL/2, 0, fwdlen=0.4)
 				
 				return STATE.BLIND_MOVE, debug_img
 			elif cls.current_phase == PHASE.COLLECT:
@@ -832,24 +943,20 @@ class NavigationModule:
 			# Move backward
 			if PathProcess.completed:
 				if cls.target_aisle == 1: # This is the aisle we came from
-					PathProcess.new_path([(0, -cls.MAX_ROBOT_ROT, None, pi/2), (cls.MAX_ROBOT_VEL/2, 0, 0.75, None)])
-				elif cls.target_aisle == 2:
-					PathProcess.new_path([(0, -cls.MAX_ROBOT_ROT, None, 3*pi/4), (cls.MAX_ROBOT_VEL/2, 0, 0.4, None)])
-				elif cls.target_aisle == 3:
-					PathProcess.new_path([(0, cls.MAX_ROBOT_ROT, None, 3*pi/4), (cls.MAX_ROBOT_VEL/2, 0, 0.4, None)])
+					PathProcess.new_path([(0, -cls.MAX_ROBOT_ROT, None, pi/2)])
+				elif cls.target_aisle == 2 or cls.target_aisle == 3:
+					PathProcess.new_path([(0, -cls.MAX_ROBOT_ROT, None, 5*pi/6)])
 				cls.drop_item_stage += 1
 		elif cls.drop_item_stage == 3:
 			# Turn around
 			if PathProcess.completed:
-				# cls.set_velocity(cls.MAX_ROBOT_VEL/2,0,fwdlen=0.2)
-				cls.drop_item_stage += 1
-		elif cls.drop_item_stage == 4:
-			# Move Forward
-			# if PathProcess.completed:
 				cls.current_phase = PHASE.COLLECT
 				cls.current_instruction = (cls.current_instruction + 1) % len(cls.instructions)
 				cls.process_instruction()
-				return STATE.LOST, debug_img
+
+				cls.avoid_dist = 0.5
+				cls.next_state = STATE.LOST
+				return STATE.AVOID_MOVE, debug_img
 
 		return STATE.DROP_ITEM, debug_img
 

@@ -405,7 +405,7 @@ class VisionModule:
 		bearing = []
 		centers = []
 		radii = []
-
+		obstructed = []
 		for contours in ContoursMarkers:
 			if cv2.contourArea(contours) > 100:
 				(x, y), radius = cv2.minEnclosingCircle(contours)
@@ -420,6 +420,11 @@ class VisionModule:
 
 				# Check if the difference between areas is within the threshold
 				if abs(contour_area - circle_area) <= area_difference_threshold:
+					if abs(contour_area - circle_area) >= 0.08 * circle_area:
+						obstructed.append(True)
+					else:
+						obstructed.append(False)
+
 					MarkerAngle = cls.GetBearing(x)
 					MarkerDistance = cls.GetDistance(radius * 2, 70)
 					if draw:
@@ -452,7 +457,8 @@ class VisionModule:
 			if shape_count == 1:
 				# Should ignore aisle number if it is obstructed at all
 				# or even if its too close to a shelf
-				pass
+				if obstructed[0]:
+					shape_count = 0
 			elif shape_count == 2:
 				# Too far apart
 				if (np.array([(x-avg_center[0])**2+(y-avg_center[1])**2 for x, y in centers]) > (5 * avg_radius)**2).any():

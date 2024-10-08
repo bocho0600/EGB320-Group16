@@ -1,4 +1,4 @@
-from threading import Thread
+from threading import Thread, Lock
 from .Globals import *
 import time
 from math import sin, cos
@@ -15,6 +15,8 @@ class PathProcess:
     fwdlen = None
     rotlen = None
     completed = True
+
+    integration_lock = Lock()
 
     @classmethod
     def motorLoop(cls):
@@ -80,17 +82,19 @@ class PathProcess:
 
     @classmethod
     def stop_integrating(cls):
-        cls.track_x = None
-        cls.track_y = None
-        cls.track_h = None
-        cls.last_integrated = None
+        with cls.integration_lock:
+            cls.track_x = None
+            cls.track_y = None
+            cls.track_h = None
+            cls.last_integrated = None
 
     @classmethod
     def localize(cls, x, y, h):
-        cls.track_x = x
-        cls.track_y = y
-        cls.track_h = h
-        cls.last_integrated = time.time()
+        with cls.integration_lock:
+            cls.track_x = x
+            cls.track_y = y
+            cls.track_h = h
+            cls.last_integrated = time.time()
 
     @classmethod
     def integrate(cls):
@@ -98,25 +102,26 @@ class PathProcess:
             return
     
         # this might be called from either thread. If problems arise use a lock
-        now = time.time()
-        delta = now - cls.last_integrated
+        with cls.integration_lock:
+            now = time.time()
+            delta = now - cls.last_integrated
 
-        fwd, rot = cls.currentSpeed()
-        h0 = cls.track_h
-        if rot == 0:
-            h1 = h0
-            dx = fwd * cos(h0) * delta
-            dy = fwd * sin(h0) * delta
-        else:
-            h1 = h0 + rot * delta
-            dx = fwd/rot * (sin(h1) - sin(h0))
-            dy = fwd/rot * (cos(h0) - cos(h1))
+            fwd, rot = cls.currentSpeed()
+            h0 = cls.track_h
+            if rot == 0:
+                h1 = h0
+                dx = fwd * cos(h0) * delta
+                dy = fwd * sin(h0) * delta
+            else:
+                h1 = h0 + rot * delta
+                dx = fwd/rot * (sin(h1) - sin(h0))
+                dy = fwd/rot * (cos(h0) - cos(h1))
 
-        cls.track_x += dx
-        cls.track_y += dy
-        cls.track_h = h1
+            cls.track_x += dx
+            cls.track_y += dy
+            cls.track_h = h1
 
-        cls.last_integrated = now
+            cls.last_integrated = now
     
     @classmethod
     def get_current_track(cls):
