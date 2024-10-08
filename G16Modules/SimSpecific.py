@@ -18,7 +18,7 @@ class SimSpecific:
             'black': (np.array([0, 0, 0]), np.array([0, 0, 0])),
             'yellow': (np.array([99, 216, 130]), np.array([99, 217, 187])),
             'green': (np.array([40, 90, 0]), np.array([70, 255, 180])),
-            'orange1': (np.array([5, 150, 150]), np.array([20, 255, 255])),
+            'orange1':(np.array([  115, 200,  60]), np.array([  130, 220, 160])),
             'orange2': (np.array([165, 150, 150]), np.array([180, 255, 255])),
 		}
 

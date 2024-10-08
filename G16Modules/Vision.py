@@ -201,12 +201,17 @@ class VisionModule:
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 		contoursLoadingArea, LoadingAreaMask = cls.findLoadingArea(imgHSV)
+		contoursItem, ItemMask = cls.findItems(imgHSV)
+
+		if draw:
+			cv2.drawContours(robotview, contoursItem, -1, (255,151,0), 1)
 
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
 
 		if contoursLoadingArea is not None and len(contoursLoadingArea) > 0:
 			x, y, width, height = cv2.boundingRect(contoursLoadingArea[0]) #todo filter largest allow obstacle 
-			cv2.rectangle(robotview, (x, y), (x + width, y + height), (0,255,255), 1)
+			if draw:
+				cv2.rectangle(robotview, (x, y), (x + width, y + height), (0,255,255), 1)
 
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
@@ -230,6 +235,7 @@ class VisionModule:
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 100, cv2.CHAIN_APPROX_NONE)
 		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
 		contoursLoadingArea, LoadingAreaMask = cls.findLoadingArea(imgHSV)
+		contoursItem, ItemMask = cls.findItems(imgHSV)
 
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
 
@@ -250,6 +256,7 @@ class VisionModule:
 			marker_distance=marker_distance,
 			marker_bearing=marker_bearing,
 			contours=contours,
+			contoursItem=contoursItem,
 			contoursShelf=contoursShelf,
 			contoursObstacle=contoursObstacle,
 			detected_shelves=detected_shelves, 

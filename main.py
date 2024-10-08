@@ -19,7 +19,7 @@ def main(): # Main function
 		Specific.start()
 		
 		VisionModule.calculate_projection_transform()
-		starting_instruction = 1
+		starting_instruction = 3
 		NavigationModule.init(STATE.LOST, instructions, starting_instruction)
 		t1 = time.time()
 
@@ -62,6 +62,8 @@ def main(): # Main function
 					t1 = t2
 			elif pipeline == 'debug':
 				# Run vision and most CPU-intensive nav code but don't move
+				NavigationModule.current_state = STATE.VEGETABLE
+				NavigationModule.set_velocity(0,0)
 				robotview = VisionModule.DebugPipeline(draw)
 
 				if draw:
