@@ -19,7 +19,7 @@ def main(): # Main function
 		Specific.start()
 		
 		VisionModule.calculate_projection_transform()
-		starting_instruction = 4
+		starting_instruction = 1
 		NavigationModule.init(STATE.LOST, instructions, starting_instruction)
 		t1 = time.time()
 

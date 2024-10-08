@@ -47,8 +47,8 @@ class RealSpecific:
 		cls.camera.start()
 	
 	def set_velocity(fwd, rot):
-		a = 420 # multiply m/s to get PWM value 0 to 255
-		rot_ms = rot * 0.17/2 # rad/s to m/s
+		a = 470 # multiply m/s to get PWM value 0 to 255
+		rot_ms = rot * 0.185/2 # rad/s to m/s
 		MobilityModule.Move(int(fwd*a), int(rot_ms*a))
 		pass
 

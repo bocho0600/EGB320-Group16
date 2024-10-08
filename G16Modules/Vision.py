@@ -203,8 +203,7 @@ class VisionModule:
 		contoursLoadingArea, LoadingAreaMask = cls.findLoadingArea(imgHSV)
 		contoursItem, ItemMask = cls.findItems(imgHSV)
 
-		if draw:
-			cv2.drawContours(robotview, contoursItem, -1, (255,151,0), 1)
+		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", draw)
 
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
 
@@ -238,11 +237,12 @@ class VisionModule:
 		contoursItem, ItemMask = cls.findItems(imgHSV)
 
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
+		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", draw)
 
-
+		
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
-		ContoursMarkers, mask1 = cls.findMarkers(WallRGB, WallMask)
+		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, draw=draw)
 
 		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
@@ -391,13 +391,13 @@ class VisionModule:
 		return WallImg, WallImgGray, filledWallMask, contoursWall1
 
 	@classmethod # Returns markers contours inside wall. Need to call findWall first
-	def findMarkers(cls, WallRGB, WallMask):
-		mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
-		#_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+	def findMarkers(cls, WallImgGray, WallMask):
+		# mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+		_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
 		markers = cv2.bitwise_and(WallMask, mask)
-		#_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
+		_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
 		ContoursMarkers, _ = cv2.findContours(markers, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		return ContoursMarkers, markers
+		return ContoursMarkers, mask1
 	
 	@classmethod # Input: marker contours, Output: marker avg center, bearing, distance, count (aisle number). Would be nice to tell if any markers are blocked
 	def GetInfoMarkers(cls, robotview, ContoursMarkers, draw=True):
@@ -420,7 +420,7 @@ class VisionModule:
 
 				# Check if the difference between areas is within the threshold
 				if abs(contour_area - circle_area) <= area_difference_threshold:
-					if abs(contour_area - circle_area) >= 0.08 * circle_area:
+					if abs(contour_area - circle_area) >= 0.15 * circle_area:
 						obstructed.append(True)
 					else:
 						obstructed.append(False)
@@ -479,10 +479,11 @@ class VisionModule:
 
 			if draw:
 				cv2.drawMarker(robotview, avg_center, (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=5, thickness=2)
-				cv2.putText(robotview, f"A: {int(degrees(avg_bearing))} deg", (int(avg_x), int(avg_y + 20)), 
-							cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
-				cv2.putText(robotview, f"D: {int(avg_distance)} cm", (int(avg_x), int(avg_y)),
-							cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+				if avg_bearing is not None:
+					cv2.putText(robotview, f"A: {int(degrees(avg_bearing))} deg", (int(avg_x), int(avg_y + 20)), 
+								cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
+					cv2.putText(robotview, f"D: {int(avg_distance)} cm", (int(avg_x), int(avg_y)),
+								cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
 				cv2.putText(robotview, f"{shape_count}", (int(avg_x - 10), int(avg_y)),
 							cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 100), 2)
 		else:

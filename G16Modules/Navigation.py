@@ -40,7 +40,7 @@ class NavigationModule:
 	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
 	MAX_ROBOT_ROT = pi/6 # rad/s
-	RADIUS = 0.22 # how far to stay away from wall
+	RADIUS = 0.18 # how far to stay away from wall
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):
@@ -761,9 +761,9 @@ class NavigationModule:
 	def COLLECT_ITEM_start(cls):
 		cls.collect_item_stage = 0
 		if cls.target_side == 'Right':
-			cls.set_velocity(0,cls.MAX_ROBOT_ROT*0.6,rotlen=pi/2)
+			cls.set_velocity(0,cls.MAX_ROBOT_ROT,rotlen=pi/2)
 		else:
-			cls.set_velocity(0,-cls.MAX_ROBOT_ROT*0.6,rotlen=pi/2)
+			cls.set_velocity(0,-cls.MAX_ROBOT_ROT,rotlen=pi/2)
 	
 	@classmethod
 	def COLLECT_ITEM_update(cls, delta, debug_img, visout):
@@ -821,9 +821,9 @@ class NavigationModule:
 			# Move backwards
 			if PathProcess.completed:
 				if cls.target_side == 'Right':
-					cls.set_velocity(0,cls.MAX_ROBOT_ROT*0.6,rotlen=pi/2)
+					cls.set_velocity(0,cls.MAX_ROBOT_ROT,rotlen=pi/2)
 				else:
-					cls.set_velocity(0,-cls.MAX_ROBOT_ROT*0.6,rotlen=pi/2)
+					cls.set_velocity(0,-cls.MAX_ROBOT_ROT,rotlen=pi/2)
 				cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 6:
 			# Face outwards
