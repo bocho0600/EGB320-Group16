@@ -235,13 +235,13 @@ class VisionModule:
 		contoursLoadingArea, LoadingAreaMask = cls.findLoadingArea(imgHSV)
 		contoursItem, ItemMask = cls.findItems(imgHSV)
 
-		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
-		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", draw)
-
+		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", False)
+		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", False)
+		detected_wall = cls.ProcessContoursObject(contoursWall1, robotview, (127,127,127), "Wall", False)
 		
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
-		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
+		ContoursMarkers, mask1 = cls.findMarkers(WallRGB, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, draw=draw)
 
 		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
@@ -259,6 +259,7 @@ class VisionModule:
 			contoursShelf=contoursShelf,
 			contoursObstacle=contoursObstacle,
 			detected_shelves=detected_shelves, 
+			detected_wall=detected_wall,
 			contoursLoadingArea=contoursLoadingArea,
 			shelfCorners=ShelfCorners)
 
@@ -341,7 +342,7 @@ class VisionModule:
 	@classmethod
 	def findObstacle(cls, imgHSV, area_threshold=100, chain=cv2.CHAIN_APPROX_SIMPLE):
 		ObstacleMask = cv2.inRange(imgHSV, cls.color_ranges['green'][0], cls.color_ranges['green'][1])
-		ObstacleMask = cv2.morphologyEx(ObstacleMask, cv2.MORPH_DILATE, np.ones((8,8)))
+		ObstacleMask = cv2.morphologyEx(ObstacleMask, cv2.MORPH_DILATE, np.ones((20,20)))
 		contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, chain)
 
 		# Filter out small contours by area
@@ -390,13 +391,13 @@ class VisionModule:
 		return WallImg, WallImgGray, filledWallMask, contoursWall1
 
 	@classmethod # Returns markers contours inside wall. Need to call findWall first
-	def findMarkers(cls, WallImgGray, WallMask):
-		# mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
-		_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+	def findMarkers(cls, WallRGB, WallMask):
+		mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+		# _, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
 		markers = cv2.bitwise_and(WallMask, mask)
-		_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
+		# _, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
 		ContoursMarkers, _ = cv2.findContours(markers, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		return ContoursMarkers, mask1
+		return ContoursMarkers, markers
 	
 	@classmethod # Input: marker contours, Output: marker avg center, bearing, distance, count (aisle number). Would be nice to tell if any markers are blocked
 	def GetInfoMarkers(cls, robotview, ContoursMarkers, draw=True):

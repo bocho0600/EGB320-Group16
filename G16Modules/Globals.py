@@ -4,10 +4,10 @@ from math import pi
 SCREEN_WIDTH = 410
 SCREEN_HEIGHT = 308
 
-is_simulator = False
-is_hitl = True
+is_simulator = True
+is_hitl = False
 is_video = False
-is_combined = True
+is_combined = False
 
 if is_combined:
 	FOV_HORIZONTAL = 60 * pi/180 # radians
