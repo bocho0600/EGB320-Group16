@@ -4,8 +4,10 @@ from .Globals import *
 import time
 from threading import Thread, Condition
 import numpy as np
+from .RP2040 import I2C
+I2C.init()
 from .Mobility import MobilityModule
-# from .ItemCollection import ItemCollectionModule
+from .ItemCollection import ItemCollectionModule
 
 class RealSpecific:
 
@@ -54,12 +56,19 @@ class RealSpecific:
 
 	@classmethod
 	def start(cls, grabber = True):
-		# ItemCollectionModule.init()
-		
+
 		cls.initialize_camera()
 		if grabber:
 			cls.frameGrabber = CamFrameGrabber(cls.camera, SCREEN_WIDTH, SCREEN_HEIGHT)
 			cls.frameGrabber.start()
+		
+		cls.leds(0b101)
+		time.sleep(0.3)
+		cls.leds(0b010)
+		time.sleep(0.3)
+		cls.leds(0b101)
+		time.sleep(0.3)
+		cls.leds(0b000)
 
 
 
@@ -74,10 +83,44 @@ class RealSpecific:
 		cls.frameGrabber.stop()
 		cls.camera.close()
 		cls.set_velocity(0,0)
+		cls.leds(0b000)
+		cls.item_collection("STOP")
+		
 
-		# if ItemCollectionModule.is_initialized:
-		# 	ItemCollectionModule.end()
 
+	last_mask = 0b000
+	@classmethod
+	def leds(cls, mask):
+		changed = mask ^ cls.last_mask
+		for i in range(3):
+			if changed >> i & 1:
+				if mask >> i & 1:
+					I2C.LedWrite(i+1,"ON")
+				else:
+					I2C.LedWrite(i+1,"OFF")
+		cls.last_mask = mask
+
+	@classmethod
+	def item_collection(cmd, time=1):
+		if cmd == "UP":
+			ItemCollectionModule.lifter_up(time)
+		elif cmd == "DOWN":
+			ItemCollectionModule.lifter_down(time)
+		elif cmd == "LSTOP":
+			ItemCollectionModule.lifter_stop()
+		elif cmd == "CLOSE":
+			ItemCollectionModule.gripper_close(time)
+		elif cmd == "OPEN":
+			ItemCollectionModule.gripper_open(time)
+		elif cmd == "HOLD":
+			ItemCollectionModule.gripper_hold(time)
+		elif cmd == "GSTOP":
+			ItemCollectionModule.gripper_stop()
+		elif cmd == "STOP":
+			ItemCollectionModule.stop_all()
+		else:
+			ItemCollectionModule.stop_all()
+			print("Invalid itemcollection command: stopping all")
 
 # Define the CamFrameGrabber class
 class CamFrameGrabber:
@@ -121,7 +164,7 @@ class CamFrameGrabber:
 		
 		# return self.currentFrame.copy()
 		imgFlip = cv2.resize(self.currentFrame, (410, 308))
-		imgRGB = cv2.rotate(imgFlip, cv2.ROTATE_180)
+		imgRGB = imgFlip #cv2.rotate(imgFlip, cv2.ROTATE_180)
 		imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)  # Convert to HSV
 		RobotView = imgRGB.copy()  # Preserve the original image
 		return imgRGB, imgHSV, RobotView

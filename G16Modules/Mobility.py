@@ -7,11 +7,10 @@ from .RP2040 import I2C
 
 class MobilityModule:
 
-	i2c = I2C()
 
 	@classmethod
 	def Stop(cls): 
-		cls.i2c.StopAll()
+		I2C.StopAll()
 		print("Motors stopped")
 
 	@classmethod
@@ -30,7 +29,7 @@ class MobilityModule:
 			left_motor_speed = max(min(left_motor_speed, max_speed), -max_speed)
 			right_motor_speed = max(min(right_motor_speed, max_speed), -max_speed)
 			
-			cls.i2c.movement(left_motor_speed, right_motor_speed)
+			I2C.movement(left_motor_speed, right_motor_speed)
 
 MobilityModule.Stop()
 

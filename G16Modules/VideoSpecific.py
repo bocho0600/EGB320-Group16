@@ -43,3 +43,11 @@ class VideoSpecific:
     @classmethod
     def end(cls):
         cls.cap.release()
+
+    @classmethod
+    def leds(cls, mask):
+        pass
+
+    @classmethod
+    def item_collection(cls, time=1):
+        pass

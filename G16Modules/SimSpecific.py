@@ -71,3 +71,11 @@ class SimSpecific:
     @classmethod
     def end(cls):
         cls.packerBotSim.StopSimulator()
+
+    @classmethod
+    def leds(cls, mask):
+        pass
+
+    @classmethod
+    def item_collection(cls, time=1):
+        pass

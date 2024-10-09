@@ -398,6 +398,7 @@ class NavigationModule:
 
 	@classmethod
 	def LOST_start(cls):
+		Specific.leds(0b001)
 		print("Lost!")
 		cls.is_inside_aisle = True
 		PathProcess.new_path([(0, cls.MAX_ROBOT_ROT, None, 2*pi)])
@@ -424,6 +425,7 @@ class NavigationModule:
 
 	@classmethod
 	def LOST_OUTSIDE_AISLE_start(cls):
+		Specific.leds(0b001)
 		if cls.current_phase == PHASE.COLLECT:
 			# if we're going to aisle, find (estimate) entry point
 			cls.found_entry_point = False
@@ -549,6 +551,7 @@ class NavigationModule:
 
 	@classmethod
 	def FACE_AISLE_2_start(cls):
+		Specific.leds(0b011)
 		cls.fa2_stage = 0
 		cls.set_velocity(0, cls.MAX_ROBOT_ROT)
 	
@@ -628,7 +631,7 @@ class NavigationModule:
 
 	@classmethod
 	def LOST_INSIDE_AISLE_start(cls):
-		pass
+		Specific.leds(0b001)
 	
 	@classmethod
 	def LOST_INSIDE_AISLE_update(cls, delta, debug_img, visout):
@@ -644,7 +647,7 @@ class NavigationModule:
 
 	@classmethod
 	def AISLE_DOWN_start(cls):
-		pass
+		Specific.leds(0b100)
 	
 	@classmethod
 	def AISLE_DOWN_update(cls, delta, debug_img, visout):
@@ -687,7 +690,7 @@ class NavigationModule:
 
 	@classmethod
 	def BLIND_MOVE_start(cls):
-		pass
+		Specific.leds(0b010)
 	
 	@classmethod
 	def BLIND_MOVE_update(cls, delta, debug_img, visout):
@@ -714,7 +717,7 @@ class NavigationModule:
 		# 	cls.am_proximity_thresh = None
 		# if not hasattr(cls, 'am_traversed_thresh'):
 		# 	cls.am_traversed_thresh = None
-
+		Specific.leds(0b001)
 		cls.avoid_moved = 0
 
 		pass
@@ -759,6 +762,7 @@ class NavigationModule:
 
 	@classmethod
 	def COLLECT_ITEM_start(cls):
+		Specific.leds(0b110)
 		cls.collect_item_stage = 0
 		if cls.target_side == 'Right':
 			cls.set_velocity(0,cls.MAX_ROBOT_ROT,rotlen=pi/2)
@@ -805,7 +809,7 @@ class NavigationModule:
 		elif cls.collect_item_stage == 2:
 			# Lower item collection
 			# Not implemented
-			cls.set_velocity(cls.MAX_ROBOT_VEL/4,0,fwdlen=0.12)
+			cls.set_velocity(cls.MAX_ROBOT_VEL/2,0,fwdlen=0.12)
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 3:
 			# Move forward
@@ -815,7 +819,8 @@ class NavigationModule:
 		elif cls.collect_item_stage == 4:
 			# Close gripper
 			# Not implemented
-			cls.set_velocity(-cls.MAX_ROBOT_VEL/4,0,fwdlen=0.12)
+			Specific.item_collection("CLOSE")
+			cls.set_velocity(-cls.MAX_ROBOT_VEL/2,0,fwdlen=0.12)
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 5:
 			# Move backwards
@@ -837,6 +842,7 @@ class NavigationModule:
 
 	@classmethod
 	def AISLE_OUT_start(cls):
+		Specific.leds(0b101)
 		cls.last_shelf_side = None
 	
 	@classmethod
@@ -876,6 +882,7 @@ class NavigationModule:
 
 	@classmethod
 	def APPROACH_PACKING_start(cls):
+		Specific.leds(0b010)
 		cls.loading_area_approach_stage = 0
 		cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen = 2*pi)
 	
@@ -922,6 +929,7 @@ class NavigationModule:
 
 	@classmethod
 	def DROP_ITEM_start(cls):
+		Specific.leds(0b010)
 		cls.drop_item_stage = 0
 		cls.set_velocity(cls.MAX_ROBOT_VEL/2,0,fwdlen=0.53)
 	
@@ -937,6 +945,7 @@ class NavigationModule:
 		elif cls.drop_item_stage == 1:
 			# Drop item
 			# Not implemented
+			Specific.item_collection("OPEN")
 			cls.set_velocity(-cls.MAX_ROBOT_VEL/2,0,fwdlen=0.43)
 			cls.drop_item_stage += 1
 		elif cls.drop_item_stage == 2:
