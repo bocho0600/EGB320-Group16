@@ -55,7 +55,7 @@ class VisionModule:
     def CaptureImage(self):
         self.frame = self.cap.capture_array()  # Capture an image from the camera
         self.frame = cv2.resize(self.frame, (410, 308))
-        self.frame = cv2.rotate(self.frame, cv2.ROTATE_180)
+        #self.frame = cv2.rotate(self.frame, cv2.ROTATE_180)
         return self.frame
 
 
@@ -101,7 +101,7 @@ class VisionModule:
     def findWall(self, imgHSV, imgRGB):
         # Create masks for the orange color (wall detection)
         gray = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY)
-        ret, WallMask = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
+        ret, WallMask = cv2.threshold(gray, 210, 255, cv2.THRESH_BINARY)
         #WallMask = cv2.inRange(imgHSV, self.color_ranges['wall'][0], self.color_ranges['wall'][1])
 
         # Find contours in the mask
@@ -129,11 +129,12 @@ class VisionModule:
             WallImgGray = cv2.cvtColor(WallImg, cv2.COLOR_BGR2GRAY)
         else:
             # No contours found, return original image and empty mask
+            largest_contour = contoursWall1
             WallImg = np.zeros_like(imgRGB)
             WallImgGray = np.zeros_like(cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY))
             filledWallMask = np.zeros_like(WallMask)
 
-        return WallImg, WallImgGray, filledWallMask, contoursWall1,gray
+        return WallImg, WallImgGray, filledWallMask, np.array([largest_contour]),gray
 
 
 
@@ -368,7 +369,7 @@ class VisionModule:
                 # Check if the difference between areas is within the threshold
                 if abs(contour_area - circle_area) <= area_difference_threshold:
                     MarkerAngle = self.GetBearing(x, imgRGB)
-                    MarkerDistance = self.GetDistance(radius * 2, 80)
+                    MarkerDistance = self.GetDistance(radius * 2, 73)
                     # cv2.putText(robotview, f"A: {int(MarkerAngle)} deg", (int(x), int(y + radius / 2)), 
                     #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (237, 110, 255), 1)
                     # cv2.putText(robotview, f"D: {int(MarkerDistance)} cm", (int(x), int(y)), 
@@ -507,7 +508,7 @@ class CamFrameGrabber:
 
     def getCurrentFrame(self):
         self.imgFlip = cv2.resize(self.currentFrame, (410, 308))
-        imgRGB = cv2.rotate(self.imgFlip, cv2.ROTATE_180)
+        imgRGB = self.imgFlip#cv2.rotate(self.imgFlip, cv2.ROTATE_180)
         imgHSV = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2HSV)  # Convert to HSV
         RobotView = imgRGB.copy()  # Preserve the original image
         return imgRGB, imgHSV, RobotView

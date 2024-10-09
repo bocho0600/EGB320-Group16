@@ -31,7 +31,7 @@ cap.start()
 frame = cap.capture_array()
 
 # reduce size to speed up	
-frame = cv2.rotate(frame, cv2.ROTATE_180)
+#frame = cv2.rotate(frame, cv2.ROTATE_180)
 
 # display
 cv2.imshow("Image", frame)

@@ -5,7 +5,7 @@ from threading import Thread
 import vision as vs
 import time
 import RP2040 as rp
-
+from Vision2 import VisionModule
 # Servo S3 is 6 kg/cm3
 # Servo S2 is 3 kg/cm3
 ground_points = np.float32([[-18,47],[18,47],[-18,150],[18,150]]) #off-set in cm
@@ -20,7 +20,26 @@ def main():
       cam = vs.CamFrameGrabber(src=0, height=FRAME_WIDTH, width=FRAME_HEIGHT)
       cam.start()
       vision = vs.VisionModule()
+      VisionModule.calculate_projection_transform()
       try:
+            def closest_point(contours, text):
+                  contours = np.array(contours)
+                  if contours.size > 0:
+                        points = VisionModule.combine_contour_points(contours, exclude_horizontal_overlap=False)
+                  
+                        if points is not None:
+                              closest_point_i = np.argmax(points[:, 1])
+                              closest_point = points[closest_point_i, :]
+
+                              projected = VisionModule.project_point_to_ground(np.array([closest_point]))[0]
+                              if projected is not None:
+                                    # Dist map processing
+                                    dist = np.sqrt(projected[0]**2 + projected[1]**2)
+                                    cv2.drawMarker(RobotView, (int(closest_point[0]), int(closest_point[1])), (0,0,255), cv2.MARKER_DIAMOND, 4)
+                                    cv2.putText(RobotView, f"{text}: {dist*100:.2f}", (int(closest_point[0]), int(closest_point[1])-20),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 1)
+                                    return dist
+                        
+                  return None
 
             while True:
 
@@ -28,20 +47,21 @@ def main():
                   frame_id = cam.getFrameID()
                   CenterCoord = vision.draw_crosshair(RobotView)
                   
+                  
+
                   #Find contours for the shelves
                   contoursShelf, ShelfMask = vision.findShelf(imgHSV)
                   # Get the detected shelf centers
                   ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "S", Draw=True)
                   ShelfCenter, ShelfBearing = vision.GetInfoShelf(RobotView, ShelfCenters, imgRGB)
-  
+                  closest_point(contoursShelf, "Shelf")
+
+                  
 
                   contoursLoadingBay, LoadingBayMask = vision.findLoadingArea(imgHSV)
                   LoadingBayCenters = vision.GetContoursShelf(contoursLoadingBay, RobotView, (0, 255, 0), "L", Draw=True)
                   LoadingBayCenter, LoadingBayBearing = vision.GetInfoShelf(RobotView, LoadingBayCenters, imgRGB)
-
-
-
-
+                  closest_point(contoursLoadingBay, "Packing")
 
                   # Detect obstacles in the HSV image
                   contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
@@ -55,6 +75,7 @@ def main():
                   ContoursMarkers, mask1 = vision.findMarkers(WallImgGray, WallMask)
                   avg_center, avg_bearing, avg_distance, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
                   
+                  closest_point(contoursWall1, "Wall")
 
                   # gray = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY)
                   # ret, WM = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)

@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 from math import cos,sin,pi,atan2,degrees
 import time
-from threading import Thread, Lock, Condition
 
 from .Globals import *
 #from threading import Thread
