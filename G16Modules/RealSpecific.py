@@ -2,7 +2,7 @@ import picamera2
 import cv2
 from .Globals import *
 import time
-from threading import Thread, Condition
+from threading import Thread
 import numpy as np
 from .RP2040 import I2C
 I2C.init()
@@ -48,7 +48,8 @@ class RealSpecific:
 		cls.image_center = cls.image_width // 2 # Calculate the center of the image
 		cls.camera.start()
 	
-	def set_velocity(fwd, rot):
+	@classmethod
+	def set_velocity(cls, fwd, rot):
 		a = 470 # multiply m/s to get PWM value 0 to 255
 		rot_ms = rot * 0.185/2 # rad/s to m/s
 		MobilityModule.Move(int(fwd*a), int(rot_ms*a))
@@ -85,7 +86,7 @@ class RealSpecific:
 		cls.set_velocity(0,0)
 		cls.leds(0b000)
 		cls.item_collection("STOP")
-		
+
 
 
 	last_mask = 0b000

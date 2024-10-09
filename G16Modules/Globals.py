@@ -5,11 +5,19 @@ SCREEN_WIDTH = 410
 SCREEN_HEIGHT = 308
 
 is_simulator = False
-is_hitl = False
-
+is_hitl = True
 is_video = False
+is_combined = True
 
-if is_simulator:
+if is_combined:
+	FOV_HORIZONTAL = 60 * pi/180 # radians
+
+	DIST_X = 0.07 # cameraDistanceFromRobotCenter
+	DIST_Z = 0.0752 # cameraHeightFromFloor
+	TILT = 1.0 * 3.1415926535 / 180
+
+	from .CombinedSpecific import CombinedSpecific as Specific
+elif is_simulator:
 	FOV_HORIZONTAL = 60 * pi/180 # radians
 
 	DIST_X = 0.07 # cameraDistanceFromRobotCenter
