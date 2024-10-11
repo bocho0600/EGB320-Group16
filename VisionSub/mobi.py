@@ -30,6 +30,6 @@ class MobilityModule:
 			right_motor_speed = max(min(right_motor_speed, max_speed), -max_speed)
 			
 			I2C.movement(left_motor_speed, right_motor_speed)
-
+I2C.init(bus_number=1, addr=0x08)
 MobilityModule.Stop()
 
