@@ -40,7 +40,7 @@ class NavigationModule:
 	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
 	MAX_ROBOT_ROT = pi/6 # rad/s
-	RADIUS = 0.13 # how far to stay away from wall
+	RADIUS = 0.23 # how far to stay away from wall
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):
@@ -497,9 +497,9 @@ class NavigationModule:
 
 
 				
-				if distance is not None and ((cls.target_aisle == 1 and distance < 0.4) or\
+				if distance is not None and ((cls.target_aisle == 1 and distance < 0.23) or\
 					(cls.target_aisle == 2 and distance < 1.2) or\
-					(cls.target_aisle == 3 and distance < 0.4)):
+					(cls.target_aisle == 3 and distance < 0.23)):
 					if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
 						# shelf is on the right
 						cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen=2*pi)

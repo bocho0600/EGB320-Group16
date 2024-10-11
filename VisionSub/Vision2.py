@@ -17,7 +17,7 @@ class VisionOutput:
 
 DIST_X = 0.15 # cameraDistanceFromRobotCenter
 DIST_Z = 0.065 # cameraHeightFromFloor
-TILT = 4.677 * pi / 180
+TILT = 1.6 * pi / 180
 
 SCREEN_WIDTH = 410
 SCREEN_HEIGHT = 308

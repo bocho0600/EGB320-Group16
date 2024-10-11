@@ -107,7 +107,7 @@ def main():
       
       # Load the image
       image = cv2.imread(image_path)
-      print(image.shape)
+      #print(image.shape)
       image = image[700:2048, 0:2731]
       #image = cv2.flip(image, 1)
       if image is None:

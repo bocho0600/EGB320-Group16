@@ -237,13 +237,14 @@ class VisionModule:
 
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", False)
 		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", False)
-		detected_wall = cls.ProcessContoursObject(contoursWall1, robotview, (127,127,127), "Wall", False)
 		
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
-		ContoursMarkers, mask1 = cls.findMarkers(WallRGB, WallMask)
+		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, draw=draw)
 
+		detected_wall = cls.ProcessContoursObject(contoursWall1, robotview, (127,127,127), "Wall", False)
+		
 		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
 		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
 		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
@@ -391,13 +392,13 @@ class VisionModule:
 		return WallImg, WallImgGray, filledWallMask, contoursWall1
 
 	@classmethod # Returns markers contours inside wall. Need to call findWall first
-	def findMarkers(cls, WallRGB, WallMask):
-		mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
-		# _, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+	def findMarkers(cls, WallImgGray, WallMask):
+		# mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+		_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
 		markers = cv2.bitwise_and(WallMask, mask)
-		# _, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
+		_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
 		ContoursMarkers, _ = cv2.findContours(markers, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		return ContoursMarkers, markers
+		return ContoursMarkers, mask1
 	
 	@classmethod # Input: marker contours, Output: marker avg center, bearing, distance, count (aisle number). Would be nice to tell if any markers are blocked
 	def GetInfoMarkers(cls, robotview, ContoursMarkers, draw=True):
