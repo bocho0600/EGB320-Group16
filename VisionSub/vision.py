@@ -101,7 +101,7 @@ class VisionModule:
     def findWall(self, imgHSV, imgRGB):
         # Create masks for the orange color (wall detection)
         gray = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY)
-        ret, WallMask = cv2.threshold(gray, 210, 255, cv2.THRESH_BINARY)
+        ret, WallMask = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
         #WallMask = cv2.inRange(imgHSV, self.color_ranges['wall'][0], self.color_ranges['wall'][1])
 
         # Find contours in the mask

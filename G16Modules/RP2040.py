@@ -134,12 +134,3 @@ class I2C:
             cls.SetMotor(2, -right_speed)
             cls.prev_right_speed = right_speed
 
-        
-            
-
-        
-
-
-
-
-

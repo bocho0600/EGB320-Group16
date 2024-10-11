@@ -4,8 +4,10 @@ import numpy as np
 from threading import Thread
 import vision as vs
 import time
-import RP2040 as rp
 from Vision2 import VisionModule
+from RP2040 import I2C
+from mobi import MobilityModule
+
 # Servo S3 is 6 kg/cm3
 # Servo S2 is 3 kg/cm3
 ground_points = np.float32([[-18,47],[18,47],[-18,150],[18,150]]) #off-set in cm
@@ -13,8 +15,6 @@ homography_matrix = np.array([[-2.11252555e-02,  6.33812791e-03,  7.01814123e+00
  ,[ 2.56484473e-05, -4.57580665e-03,  1.00000000e+00]])
 
 def main():
-      i2c = rp.I2C()
-      i2c.ServoSet(3,0)
       FRAME_WIDTH = 820
       FRAME_HEIGHT = 616
       cam = vs.CamFrameGrabber(src=0, height=FRAME_WIDTH, width=FRAME_HEIGHT)
@@ -54,15 +54,11 @@ def main():
                   # Get the detected shelf centers
                   ShelfCenters = vision.GetContoursShelf(contoursShelf, RobotView, (0, 0, 255), "S", Draw=True)
                   ShelfCenter, ShelfBearing = vision.GetInfoShelf(RobotView, ShelfCenters, imgRGB)
-                  closest_point(contoursShelf, "Shelf")
-
-                  
 
                   contoursLoadingBay, LoadingBayMask = vision.findLoadingArea(imgHSV)
                   LoadingBayCenters = vision.GetContoursShelf(contoursLoadingBay, RobotView, (0, 255, 0), "L", Draw=True)
                   LoadingBayCenter, LoadingBayBearing = vision.GetInfoShelf(RobotView, LoadingBayCenters, imgRGB)
-                  closest_point(contoursLoadingBay, "Packing")
-
+                  
                   # Detect obstacles in the HSV image
                   contoursObstacle, ObstacleMask = vision.findObstacle(imgHSV)
                   # Get the list of detected obstacles' centers and dimensions
@@ -74,8 +70,10 @@ def main():
                   WallRGB,  WallImgGray, WallMask,contoursWall1, GrayScale_Image = vision.findWall(imgHSV,imgRGB)
                   ContoursMarkers, mask1 = vision.findMarkers(WallImgGray, WallMask)
                   avg_center, avg_bearing, avg_distance, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
-                  
-                  closest_point(contoursWall1, "Wall")
+                  if shape_count < 3:
+                        MobilityModule.Move(0, 25)
+                  else :
+                        MobilityModule.Move(0, 0)
 
                   # gray = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY)
                   # ret, WM = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
