@@ -869,38 +869,38 @@ class NavigationModule:
 		# Move towards the exit point, which is the center of the gap between the shelves
 		# When we can no longer see the shelves, queue a blind move forwards into -> LOST_OUTSIDE_AISLE
 		
-		# if cls.aisle_out_stage == -1:
-		# 	if visout.detected_shelves == None:
-		# 		cls.next_state = STATE.APPROACH_PACKING
-		# 		cls.avoid_dist = 0.4
-		# 		return STATE.AVOID_MOVE, debug_img
-		# 	cls.aisle_out_stage = 0
+		if cls.aisle_out_stage == -1:
+			if visout.detected_shelves == None:
+				cls.next_state = STATE.APPROACH_PACKING
+				cls.avoid_dist = 0.4
+				return STATE.AVOID_MOVE, debug_img
+			cls.aisle_out_stage = 0
 
-		# if cls.aisle_out_stage == 0:
+		if cls.aisle_out_stage == 0:
 
-		if visout.detected_wall is not None:
-			fwd, rot, dist = cls.move_into_path((visout.detected_wall[0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH, debug_img, visout.contours, handle_outer=False)
-			cls.set_velocity(fwd, rot)
-		else:
+		# if visout.detected_wall is not None:
+		# 	fwd, rot, dist = cls.move_into_path((visout.detected_wall[0][0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH, debug_img, visout.contours, handle_outer=False)
+		# 	cls.set_velocity(fwd, rot)
+		# else:
 			fwd, rot, dist = cls.move_into_path('longest', debug_img, visout.contours, handle_outer=False)
 			cls.set_velocity(fwd, rot)
 
-		# 	if visout.detected_shelves is None:
-		# 		cls.ao_t1 = time.time()
-		# 		cls.set_velocity(0, -cls.MAX_ROBOT_ROT * np.sign(cls.last_shelf_side))
-		# 		cls.aisle_out_stage += 1
-		# 	elif visout.detected_shelves is not None:
-		# 		cls.last_shelf_side = (visout.detected_shelves[0][0]-SCREEN_WIDTH/2) * FOV_HORIZONTAL/SCREEN_WIDTH
-		# elif cls.aisle_out_stage == 1:
-		# 	if visout.detected_shelves is not None:
-		# 		cls.ao_t2 = time.time()
-		# 		PathProcess.new_path([(0, cls.MAX_ROBOT_ROT * np.sign(cls.last_shelf_side), None, (cls.ao_t2 - cls.ao_t1) * cls.MAX_ROBOT_ROT/2)])
-		# 		cls.aisle_out_stage += 1
-		# elif cls.aisle_out_stage == 2:
-		# 	if PathProcess.completed:
-		# 		cls.next_state = STATE.APPROACH_PACKING
-		# 		cls.avoid_dist = 0.4
-		# 		return STATE.AVOID_MOVE, debug_img
+			if visout.detected_shelves is None:
+				cls.ao_t1 = time.time()
+				cls.set_velocity(0, -cls.MAX_ROBOT_ROT * np.sign(cls.last_shelf_side))
+				cls.aisle_out_stage += 1
+			elif visout.detected_shelves is not None:
+				cls.last_shelf_side = (visout.detected_shelves[0][0]-SCREEN_WIDTH/2) * FOV_HORIZONTAL/SCREEN_WIDTH
+		elif cls.aisle_out_stage == 1:
+			if visout.detected_shelves is not None:
+				cls.ao_t2 = time.time()
+				PathProcess.new_path([(0, cls.MAX_ROBOT_ROT * np.sign(cls.last_shelf_side), None, (cls.ao_t2 - cls.ao_t1) * cls.MAX_ROBOT_ROT/2)])
+				cls.aisle_out_stage += 1
+		elif cls.aisle_out_stage == 2:
+			if PathProcess.completed:
+				cls.next_state = STATE.APPROACH_PACKING
+				cls.avoid_dist = 0.4
+				return STATE.AVOID_MOVE, debug_img
 
 
 
