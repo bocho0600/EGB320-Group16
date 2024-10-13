@@ -232,66 +232,11 @@ class NavigationModule:
 	def checkContour(cont):
 		return cont is not None and len(cont) > 0
 
-	# @classmethod
-	# def forced_avoidance_start(cls):
-	# 	cls.last_left_dist = 2.0
-	# 	cls.last_right_dist = 2.0
-	# 	cls.avoid_right = 0
-	# 	cls.avoid_left = 0
-	# 	cls.left_obstacle_dist = None
-	# 	cls.right_obstacle_dist = None
+	# forced avoidance here
+	@classmethod
+	def forced_avoidance_corner_tracking(cls, corners):
+		pass
 
-	# @classmethod
-	# def forced_avoidance(cls, dist_map):
-	# 	if dist_map is not None and (dist_map[:, 1]>0).any():
-	# 		# Forced Avoidance
-	# 		left_dist = dist_map[dist_map[:,1]>0][0,0]
-	# 		right_dist = dist_map[dist_map[:,1]>0][-1,0]
-			
-	# 		change_in_left = left_dist - cls.last_left_dist
-	# 		change_in_right = right_dist - cls.last_right_dist
-
-	# 		# print(f"{left_dist:.2f}, {right_dist:.2f}")
-			
-	# 		# if we were within 0.3m of an obstacle and cant see it anymore
-	# 		# (edge distance increased by 0.2 or more,  *this only works for shelves, if there are narrow obstacles it will be weird* )
-	# 		if change_in_left > 0.2 and cls.last_left_dist < 0.6 and PathProcess.fwd > 0:# and cls.last_rot > 0:
-	# 			print("AVOID LEFT!")
-	# 			cls.avoid_left = cls.last_left_dist * sin(FOV_HORIZONTAL)+0.1
-	# 			cls.left_obstacle_dist = cls.last_left_dist
-	# 		if change_in_right > 0.2 and cls.last_right_dist < 0.6 and PathProcess.fwd > 0:# and cls.last_rot < 0:
-	# 			print("AVOID RIGHT!")
-	# 			cls.avoid_right = cls.last_right_dist * sin(FOV_HORIZONTAL)+0.1
-	# 			cls.right_obstacle_dist = cls.last_right_dist
-
-	# 		# if we are avoiding an obstacle just act like it is still there on the edge
-	# 		if cls.avoid_left > 0:
-	# 			dist_map[0,0] = cls.left_obstacle_dist
-	# 			dist_map[0,1] = 1 # treat as real point (expand in safety)
-	# 		if cls.avoid_right > 0:
-	# 			dist_map[-1,0] = cls.right_obstacle_dist
-	# 			dist_map[-1,1] = 1 # treat as real point (expand in safety)
-			
-	# 		cls.last_left_dist = left_dist
-	# 		cls.last_right_dist = right_dist
-	# 		#return dist_map
-	# 	else:
-	# 		cls.last_left_dist = 0.3
-	# 		cls.last_right_dist = 0.3
-	# if debug_img is not None:
-	# 			if cls.avoid_left > 0:
-	# 				debug_img = cv2.putText(debug_img, "A", (20,20), 0, 1, (0,0,255), 2)
-	# 			if cls.avoid_right > 0:
-	# 				debug_img = cv2.putText(debug_img, "A", (SCREEN_WIDTH-20,20), 0, 1, (0,0,255), 2)
-
-# 		return dist_map
-	
-	# @classmethod
-	# def forced_avoidance_timer_update(cls, fwd, delta):
-	# 	if cls.avoid_right>0:
-	# 		cls.avoid_right -= fwd * delta
-	# 	if cls.avoid_left>0:
-	# 		cls.avoid_left -= fwd * delta
 
 	@classmethod
 	def move_into_path(cls, target_bearing, debug_img, contours, handle_outer=True, handle_outer_value=SCREEN_HEIGHT-1, force_forward=False):
