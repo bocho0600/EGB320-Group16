@@ -234,8 +234,27 @@ class NavigationModule:
 
 	# forced avoidance here
 	@classmethod
-	def forced_avoidance_corner_tracking(cls, corners):
-		pass
+	def forced_avoidance_corner_tracking(cls, safety_map, corners):
+		
+		# Find which points in track points 1 moved out of the screen and add them to track 2.
+		p_factor = SCREEN_WIDTH / FOV_HORIZONTAL
+
+		points = PathProcess.get_tracked_points_relative()
+		pixels = VisionModule.project_point_to_screen()
+
+		for point, pixel in zip(points, pixels):
+			pass
+
+		# Filter to only keep the closest point on each side in track 2.
+		# Then update safety_map from them.
+		PathProcess.process_tracked_points(1)
+		
+
+		# clear track 1 and add current corners to track points 1
+		corner_points = VisionModule.project_point_to_ground(corners)
+		PathProcess.track_points = corner_points
+
+		return safety_map
 
 
 	@classmethod
