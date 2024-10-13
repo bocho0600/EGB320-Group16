@@ -150,6 +150,8 @@ class NavigationModule:
 
 		def safety_pass(enumeration, indexf):
 			effect = []
+			dist_n = dist_map.copy()
+			r_f = 1.0
 			for i, curr_dist in enumeration:
 				
 
@@ -166,7 +168,7 @@ class NavigationModule:
 
 				# if effect is empty include this point and continue
 				if len(effect) == 0:
-					dist_map[indexf(i)] = curr_dist
+					dist_n[indexf(i)] = curr_dist - r_f*cls.RADIUS
 					if should_expand[indexf(i)]:
 						effect.append((curr_dist, new_expiry_pix))
 					continue
@@ -175,9 +177,15 @@ class NavigationModule:
 				# The minimum effective point.
 				min_dist_effect, min_dist_expiry = effect[0]
 
+				# Diamond form
+				circle_r_pixels = p_factor * np.arctan(cls.RADIUS/min_dist_effect)
+				circle_x_pixels = circle_r_pixels - (min_dist_expiry - i)
+				center_proximity_fac = 1.0 - abs(circle_x_pixels/circle_r_pixels) # range from 0 to 1
+				min_dist_effect = min_dist_effect - r_f*center_proximity_fac * cls.RADIUS
+
 				if curr_dist < min_dist_effect: # If this point is a new minimum, store it at the beginning
 					# update the current point
-					dist_map[indexf(i)] = curr_dist
+					dist_n[indexf(i)] = curr_dist - r_f*cls.RADIUS
 
 
 					# add the current point
@@ -193,7 +201,9 @@ class NavigationModule:
 				
 				else: # If this point is not a new minimum then take the minimum effective dist
 					# update the current point
-					dist_map[indexf(i)] = min_dist_effect
+
+
+					dist_n[indexf(i)] = min_dist_effect
 
 					# Still make this point effective if it might expire later than the current minimum effective point
 					if should_expand[indexf(i)] and (new_expiry_pix > min_dist_expiry):
@@ -213,12 +223,16 @@ class NavigationModule:
 
 						# add the current point
 						effect.insert(j, (curr_dist, new_expiry_pix))
+			return dist_n
 
 
-		safety_pass(enumerate(dist_map), lambda i:i)
-		safety_pass(enumerate(reversed(dist_map)), lambda i:-i-1)
+		# We have to do this now so first pass doesnt influence 2nd pass
+		safety_1 = safety_pass(enumerate(dist_map), lambda i:i)
+		safety_2 = safety_pass(enumerate(reversed(dist_map)), lambda i:-i-1)
 
-		return dist_map
+		safety_map = np.minimum(safety_1, safety_2)
+
+		return safety_map
 
 	@staticmethod
 	def checkContour(cont):
