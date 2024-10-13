@@ -20,20 +20,23 @@ def main(): # Main function
 		
 		VisionModule.calculate_projection_transform()
 		starting_instruction = 3
-		NavigationModule.init(STATE.LOST, instructions, starting_instruction)
+
+
+		NavigationModule.am_proximity_thresh = 0.2
+		NavigationModule.am_target_x,NavigationModule.am_target_y = (0.8, 0.5)
+		NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
 		t1 = time.time()
 
-		pipeline = 'nav'
+		pipeline = 'debug_distmap'
 		draw = True
 
 		while True:
 		
 			if pipeline == 'debug_distmap':
 				# Run vision and most CPU-intensive nav code but don't move
-				NavigationModule.current_state = STATE.VEGETABLE
 				robotview, visout = VisionModule.Pipeline(False)
 				points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
-				points = VisionModule.handle_outer_contour(points)
+				#points = VisionModule.handle_outer_contour(points)
 				points, projected_floor = VisionModule.project_and_filter_contour(points)
 				if points is not None and points.shape[0] > 3:
 					dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point

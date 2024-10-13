@@ -4,7 +4,7 @@ from math import pi
 SCREEN_WIDTH = 410
 SCREEN_HEIGHT = 308
 
-is_simulator = False
+is_simulator = True
 is_hitl = False
 is_video = False
 is_combined = False
@@ -41,7 +41,7 @@ else:
 	# DIST_Z = 0.109 # cameraHeightFromFloor
 	# TILT = -8.785 * pi / 180
 
-	# Kelvin's chassis
+	# New chassis
 	DIST_X = 0.15 # cameraDistanceFromRobotCenter
 	DIST_Z = 0.122 # cameraHeightFromFloor
 	TILT = 4.677 * pi / 180
