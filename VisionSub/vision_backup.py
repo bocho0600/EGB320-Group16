@@ -4,15 +4,12 @@ import numpy as np
 from threading import Thread
 import vision as vs
 import time
-from Vision2 import VisionModule
+from vision import VisionModule
 from RP2040 import I2C
 from mobi import MobilityModule
 
 # Servo S3 is 6 kg/cm3
 # Servo S2 is 3 kg/cm3
-ground_points = np.float32([[-18,47],[18,47],[-18,150],[18,150]]) #off-set in cm
-homography_matrix = np.array([[-2.11252555e-02,  6.33812791e-03,  7.01814123e+00],[ 1.80590083e-04, -8.03575074e-03, -1.43661305e+01]
- ,[ 2.56484473e-05, -4.57580665e-03,  1.00000000e+00]])
 
 def main():
       FRAME_WIDTH = 820
@@ -20,27 +17,7 @@ def main():
       cam = vs.CamFrameGrabber(src=0, height=FRAME_WIDTH, width=FRAME_HEIGHT)
       cam.start()
       vision = vs.VisionModule()
-      VisionModule.calculate_projection_transform()
       try:
-            def closest_point(contours, text):
-                  contours = np.array(contours)
-                  if contours.size > 0:
-                        points = VisionModule.combine_contour_points(contours, exclude_horizontal_overlap=False)
-                  
-                        if points is not None:
-                              closest_point_i = np.argmax(points[:, 1])
-                              closest_point = points[closest_point_i, :]
-
-                              projected = VisionModule.project_point_to_ground(np.array([closest_point]))[0]
-                              if projected is not None:
-                                    # Dist map processing
-                                    dist = np.sqrt(projected[0]**2 + projected[1]**2)
-                                    cv2.drawMarker(RobotView, (int(closest_point[0]), int(closest_point[1])), (0,0,255), cv2.MARKER_DIAMOND, 4)
-                                    cv2.putText(RobotView, f"{text}: {dist*100:.2f}", (int(closest_point[0]), int(closest_point[1])-20),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 1)
-                                    return dist
-                        
-                  return None
-
             while True:
 
                   imgRGB, imgHSV, RobotView = cam.getCurrentFrame()
@@ -70,8 +47,9 @@ def main():
                   WallRGB,  WallImgGray, WallMask,contoursWall1, GrayScale_Image = vision.findWall(imgHSV,imgRGB)
                   ContoursMarkers, mask1 = vision.findMarkers(WallImgGray, WallMask)
                   avg_center, avg_bearing, avg_distance, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
+                  
                   if shape_count < 3:
-                        MobilityModule.Move(0, 25)
+                        MobilityModule.Move(0, 20)
                   else :
                         MobilityModule.Move(0, 0)
 
