@@ -304,7 +304,7 @@ class NavigationModule:
 						corner1[0], corner1[0] + 70*np.array([cos(corner1[2]*pi/180), sin(corner1[2]*pi/180)]),
 				  		corner2[0], corner2[0] + 70*np.array([cos(corner2[2]*pi/180), sin(corner2[2]*pi/180)])])
 				
-					ppoints = VisionModule.project_point_to_ground(my_points)
+					ppoints = VisionModule.project_to_ground(my_points)
 
 					theta1 = marker_bearing - (corner1[0][0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH
 					theta2 = (corner2[0][0]-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH - marker_bearing

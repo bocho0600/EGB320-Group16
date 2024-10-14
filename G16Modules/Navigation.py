@@ -32,10 +32,10 @@ PHASE = Enum('PHASE', [
 class NavigationModule:
 	
 	MAX_ROBOT_VEL = 0.13 # m/s
-	ROTATIONAL_BIAS = 0.3 #tweak this parameter to be more or less aggressive with turns vs straight
+	ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
 	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
-	MAX_ROBOT_ROT = pi/6 # rad/s
-	RADIUS = 0.23 # how far to stay away from wall
+	MAX_ROBOT_ROT = pi/3 # rad/s
+	RADIUS = 0.13 # how far to stay away from wall
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):
@@ -96,6 +96,7 @@ class NavigationModule:
 		cls.call_current_start()
 		#cls.forced_avoidance_start()
 
+		PathProcess.RADIUS = cls.RADIUS
 		PathProcess.Start()
 	
 	@classmethod
@@ -125,7 +126,17 @@ class NavigationModule:
 		if new_state != cls.current_state:
 			cls.current_state = new_state
 			cls.call_current_start()
-		return debug_img, None
+
+
+		img2 = np.zeros_like(debug_img)
+		def mark(point, color=(255,255,255), marker =cv2.MARKER_DIAMOND):
+			cv2.drawMarker(img2, tuple((np.array([SCREEN_WIDTH/2, SCREEN_HEIGHT/2]) + np.array([100, -100]) * point[::-1]).astype(np.int32)), color, cv2.MARKER_DIAMOND, 4, 2)
+		for point in PathProcess.get_tracked_points_relative(bank=1):
+			mark(point)
+		mark(PathProcess.transform_world_to_bot(np.array([[0,0]]))[0], (255,0,0))
+		mark(np.array([0]), (0,255,255), marker=cv2.MARKER_CROSS)
+
+		return debug_img, img2
 	#endregion
 
 	#region Utility Functions
@@ -175,9 +186,9 @@ class NavigationModule:
 				circle_r_pixels = p_factor * np.arctan(cls.RADIUS/min_dist_effect)
 				circle_x_pixels = circle_r_pixels - (min_dist_expiry - i)
 				center_proximity_fac = 1.0 - abs(circle_x_pixels/circle_r_pixels) # range from 0 to 1
-				min_dist_effect = min_dist_effect - r_f*center_proximity_fac * cls.RADIUS
+				min_dist_effect = min_dist_effect - cls.RADIUS * r_f * center_proximity_fac
 
-				if curr_dist < min_dist_effect: # If this point is a new minimum, store it at the beginning
+				if curr_dist - r_f*cls.RADIUS < min_dist_effect: # If this point is a new minimum, store it at the beginning
 					# update the current point
 					dist_n[indexf(i)] = curr_dist - r_f*cls.RADIUS
 
@@ -232,29 +243,115 @@ class NavigationModule:
 	def checkContour(cont):
 		return cont is not None and len(cont) > 0
 
-	# forced avoidance here
+
 	@classmethod
-	def forced_avoidance_corner_tracking(cls, safety_map, corners):
+	def forced_avoidance_corner_tracking(cls, corners):
 		
 		# Find which points in track points 1 moved out of the screen and add them to track 2.
-		p_factor = SCREEN_WIDTH / FOV_HORIZONTAL
-
-		points = PathProcess.get_tracked_points_relative()
-		pixels = VisionModule.project_point_to_screen()
-
-		for point, pixel in zip(points, pixels):
-			pass
+		points = PathProcess.get_tracked_points_relative(bank=0)
+		if points is not None and len(points) > 0:
+			pixels = VisionModule.project_to_screen(points)
+			margin = 8 # pixels
+			for point, pixel in zip(points, pixels):
+				if pixel[1] > SCREEN_HEIGHT-1-margin or pixel[0] < 0+margin or pixel[0] > SCREEN_WIDTH-1-margin:
+					PathProcess.add_tracked_point_relative(point, bank=1)
+					print(f"got a point to avoid {point}")
 
 		# Filter to only keep the closest point on each side in track 2.
-		# Then update safety_map from them.
-		PathProcess.process_tracked_points(1)
-		
+		cls.process_tracked_points(bank=1)
 
-		# clear track 1 and add current corners to track points 1
-		corner_points = VisionModule.project_point_to_ground(corners)
-		PathProcess.track_points = corner_points
+		# clear track 1 and add current corners to track 1
+		PathProcess.clear_tracked_points(bank=0)
+		corner_points = VisionModule.project_to_ground(corners)
+		for point in corner_points:
+			PathProcess.add_tracked_point_relative(point, bank=0)
+
+	@classmethod
+	def fa_process_safety(cls, safety_map):
+		# Update safety_map from bank 1 (closest tracked point left and right)
+		points = PathProcess.get_tracked_points_relative(bank=1)
+		if points is not None and len(points) > 0:
+			pixels = VisionModule.project_to_screen(points)
+
+			for point, pixel in zip(points, pixels):
+				# Update safety map here
+				#angle = np.arctan2(point[1], point[0])#(pixel[0] - SCREEN_WIDTH/2) * FOV_HORIZONTAL / SCREEN_WIDTH
+				dist = np.linalg.norm(point)
+
+				#print(f"Update safety map with angle {angle}, dist {dist}")
+
+				r_pixels = np.arctan(cls.RADIUS/dist) * SCREEN_WIDTH / FOV_HORIZONTAL
+				if point[1] < 0:
+					effective_edge = int(pixel[0] + r_pixels)
+					#print(f"Point is on the left, affects up until: {effective_edge}")
+					for i in range(0, min(effective_edge, SCREEN_WIDTH-1)):
+						# Diamond form
+						x_pixels = r_pixels - (effective_edge - i)
+						center_proximity_fac = 1.0 - abs(x_pixels/r_pixels) # range from 0 to 1
+
+						safety_map[i] = min(safety_map[i], dist - center_proximity_fac * cls.RADIUS)
+
+
+				else:
+					effective_edge = int(pixel[0] - r_pixels)
+					#print(f"Point is on the right, affects from: {effective_edge}")
+					for i in range(max(0,effective_edge), SCREEN_WIDTH-1):
+						# Diamond form
+						x_pixels = r_pixels + (effective_edge - i)
+						center_proximity_fac = 1.0 - abs(x_pixels/r_pixels) # range from 0 to 1
+
+						safety_map[i] = min(safety_map[i], dist - center_proximity_fac * cls.RADIUS)
+				
 
 		return safety_map
+
+	@classmethod
+	def process_tracked_points(cls, bank=0):
+		# Delete points which are in view, behind robot, or too far away
+		relative = PathProcess.get_tracked_points_relative(bank)
+		if relative is None or len(relative)<1:
+			return
+		
+		# Behind
+		del1_mask = relative[:, 0] < 0 
+		
+		# Not effective to safety map 
+		# This could be deterimental if we turn away then turn back which we probably will!
+		# pixels = VisionModule.project_to_screen(relative)
+		# angle = (pixels[0] - SCREEN_WIDTH/2) * FOV_HORIZONTAL / SCREEN_WIDTH
+		# dist = np.linalg.norm(relative, axis=1)
+		# effective_edge = pixels[:, 0] - np.sign(relative[:, 1]) * np.arctan(cls.RADIUS/dist) * SCREEN_WIDTH / FOV_HORIZONTAL
+		# del2_mask = (effective_edge < 0) | (effective_edge > SCREEN_WIDTH-1)
+
+		# Too far away
+		del3_mask = relative[:, 0]**2+relative[:, 1]**2 > 0.8**2 
+
+		# if del1_mask.any():
+		#     print(f"{np.sum(del1_mask)} points are behind")
+		# # if del2_mask.any():
+		# #     print(f"{np.sum(del2_mask)} points are not effective")
+		# if del3_mask.any():
+		#     print(f"{np.sum(del3_mask)} points are too far")
+
+		relative = relative[~(del1_mask  | del3_mask), :]
+		dists = np.linalg.norm(relative, axis=1)
+
+
+		# Only keep closest point on left and right
+		PathProcess.clear_tracked_points(bank)
+		left_mask = relative[:, 1] < 0
+		if left_mask.any():
+			for left in relative[left_mask, :]:
+			# left = np.argmin(dists[left_mask])
+			# left = relative[left_mask, :][left, :]
+				PathProcess.add_tracked_point_relative(left, bank)
+
+		right_mask = relative[:, 1] > 0
+		if right_mask.any():
+			for right in relative[right_mask, :]:
+			# right = np.argmin(dists[right_mask])
+			# right = relative[right_mask][right, :]
+				PathProcess.add_tracked_point_relative(right, bank)
 
 
 	@classmethod
@@ -275,76 +372,81 @@ class NavigationModule:
 		if handle_outer:
 			points = VisionModule.handle_outer_contour(points, handle_outer_value)
 		points, projected_floor = VisionModule.project_and_filter_contour(points)
+
+
+
 		if points is not None and points.shape[0] > 3:
-			# Dist map processing
 			dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
-			dist_map[:, 0] = np.clip(dist_map[:, 0], None, 0.56) # ignore anything far away
-			#dist_map = cls.forced_avoidance(dist_map)
+		else:
+			dist_map = np.ones((SCREEN_WIDTH, 2), np.float64)
 
-			safety_map = NavigationModule.expand_safety(dist_map)
-			
+		# Dist map processing
+		dist_map[:, 0] = np.clip(dist_map[:, 0], None, 0.56) # ignore anything far away
 
-			# Target
-			# If target is none go longest
-			attractive_map = np.zeros(safety_map.size)
-			if type(target_bearing) == str and target_bearing == 'longest':
-				pass
+		safety_map = NavigationModule.expand_safety(dist_map)
+		safety_map = cls.fa_process_safety(safety_map)
+
+		# Target
+		# If target is none go longest
+		attractive_map = np.zeros(safety_map.size)
+		if type(target_bearing) == str and target_bearing == 'longest':
+			pass
+		else:
+			for i in range(safety_map.size):
+				bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
+				attractive_map[i] = 0.5 - 0.15 * abs(bearing - target_bearing)
+		potential_map = attractive_map + safety_map
+
+		# if debug_img is not None:
+		# 	debug_img = cv2.drawContours(debug_img, contours, -1, (0,0,255),2)
+		# 	debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
+		# 	debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
+				
+		# Only can occur when there is no target
+		if abs(potential_map.min() - potential_map.max()) < 0.01:
+			if not force_forward:
+				# No safe path: move backwards
+				#cls.forced_avoidance_start() #reset FA
+				forward_vel = -cls.MAX_ROBOT_VEL/2
+				rotational_vel = 0
+				path_distance = 0
 			else:
-				for i in range(safety_map.size):
-					bearing = (i/SCREEN_WIDTH - 1/2) * FOV_HORIZONTAL
-					attractive_map[i] = 0.5 - 0.15 * abs(bearing - target_bearing)
-			potential_map = attractive_map + safety_map
-
-			# if debug_img is not None:
-			# 	debug_img = cv2.drawContours(debug_img, contours, -1, (0,0,255),2)
-			# 	debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
-			# 	debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (255, 255, 0), 1) # draw
-					
-
-			if abs(potential_map.min() - potential_map.max()) < 0.01:
-				if not force_forward:
-					# No safe path: move backwards
-					#cls.forced_avoidance_start() #reset FA
-					forward_vel = -cls.MAX_ROBOT_VEL/2
-					rotational_vel = 0
-					path_distance = 0
+				if type(target_bearing) == str and target_bearing == 'longest':
+					goal_error = 0
 				else:
-					if type(target_bearing) == str and target_bearing == 'longest':
-						goal_error = 0
-					else:
-						goal_error = target_bearing
-					path_distance = None
-					forward_vel, rotational_vel = calculate_fwd_rot(goal_error)
-
-					if debug_img is not None:
-						debug_img = cv2.drawMarker(debug_img, (int(target_bearing*SCREEN_WIDTH/FOV_HORIZONTAL+SCREEN_WIDTH/2), SCREEN_HEIGHT//2), (0,255,255), cv2.MARKER_STAR, 10)
-			else:
-				# Move into highest potential
-
-				goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
-				path_distance = max(dist_map[:,0])
+					goal_error = target_bearing
+				path_distance = None
 				forward_vel, rotational_vel = calculate_fwd_rot(goal_error)
 
 				if debug_img is not None:
-					debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
-					debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
-				
+					debug_img = cv2.drawMarker(debug_img, (int(target_bearing*SCREEN_WIDTH/FOV_HORIZONTAL+SCREEN_WIDTH/2), SCREEN_HEIGHT//2), (0,255,255), cv2.MARKER_STAR, 10)
+		else:
+			# Move into highest potential
 
-			return forward_vel, rotational_vel, path_distance
-		
-		if force_forward:
-			if type(target_bearing) == str and target_bearing == 'longest':
-				goal_error = 0
-			else:
-				goal_error = target_bearing
-			path_distance = None
+			goal_error = (potential_map.argmax() - SCREEN_WIDTH/2) / (SCREEN_WIDTH) * FOV_HORIZONTAL
+			path_distance = max(dist_map[:,0])
 			forward_vel, rotational_vel = calculate_fwd_rot(goal_error)
 
 			if debug_img is not None:
-				debug_img = cv2.drawMarker(debug_img, (int(goal_error*SCREEN_WIDTH/FOV_HORIZONTAL+SCREEN_WIDTH/2), SCREEN_HEIGHT//2), (0,255,255), cv2.MARKER_STAR, 10)
-			return forward_vel, rotational_vel, path_distance
+				debug_img = cv2.polylines(debug_img, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - potential_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+				debug_img = cv2.drawMarker(debug_img, (potential_map.argmax(), int(SCREEN_HEIGHT - potential_map.max()/2 * SCREEN_HEIGHT)), (0,255,255), cv2.MARKER_STAR, 10)
+			
+
+		return forward_vel, rotational_vel, path_distance
+		
+		# if force_forward:
+		# 	if type(target_bearing) == str and target_bearing == 'longest':
+		# 		goal_error = 0
+		# 	else:
+		# 		goal_error = target_bearing
+		# 	path_distance = None
+		# 	forward_vel, rotational_vel = calculate_fwd_rot(goal_error)
+
+		# 	if debug_img is not None:
+		# 		debug_img = cv2.drawMarker(debug_img, (int(goal_error*SCREEN_WIDTH/FOV_HORIZONTAL+SCREEN_WIDTH/2), SCREEN_HEIGHT//2), (0,255,255), cv2.MARKER_STAR, 10)
+		# 	return forward_vel, rotational_vel, path_distance
 				
-		return -cls.MAX_ROBOT_VEL/4, cls.MAX_ROBOT_ROT/2, None
+		# return -cls.MAX_ROBOT_VEL/4, cls.MAX_ROBOT_ROT/2, None
 
 	
 	times = []
@@ -692,7 +794,7 @@ class NavigationModule:
 		# can either terminate when estimated distance to the target is less than a threshold,
 		# or when the estimated traversed distance exceeds a threshold.
 
-		PathProcess.localize(-cls.am_target_x,-cls.am_target_y, 0)
+		PathProcess.localize(-cls.am_target_x,cls.am_target_y, 0)
 
 		if not hasattr(cls, 'am_proximity_thresh'):
 			cls.am_proximity_thresh = None
@@ -713,7 +815,7 @@ class NavigationModule:
 		# THis should also serve as our biased_move function to be able to move forward while turning left around the aisle. 
 
 		x, y, h = PathProcess.get_current_track()
-
+		cls.forced_avoidance_corner_tracking(np.array([s[0] for s in visout.shelfCorners]))
 		
 
 		if cls.am_traversed_thresh is not None and (x+cls.am_target_x)**2+(y+cls.am_target_y)**2 >= cls.am_traversed_thresh**2:
@@ -721,16 +823,16 @@ class NavigationModule:
 		elif cls.am_proximity_thresh is not None and x**2+y**2 <= cls.am_proximity_thresh**2:
 			return cls.next_state, debug_img
 		else:
-			bearing = - h - np.arctan2(y, -x)
+			bearing = h - np.arctan2(-y, -x)
 			cv2.drawMarker(debug_img, (int(bearing*SCREEN_WIDTH/FOV_HORIZONTAL + SCREEN_WIDTH/2), SCREEN_HEIGHT - int(200*np.linalg.norm(np.array([x,y])))), (255,0,0), cv2.MARKER_DIAMOND, 12)
 
 
 			fwd, rot, dist = cls.move_into_path(bearing, debug_img, visout.contours, handle_outer=True, handle_outer_value = 1) # handle outer stuff means empty column (wall) is treated as far away.
 
-			print(f"{x = :.3f}, \t{y = :.3f}, \t{h = :.3f}, \t{bearing = :.3f}, \t{fwd = :.3f}, \t{rot = :.3f}, \tdist = {dist if dist is not None else -8888:.3f}")
+			#print(f"{x = :.3f}, \t{y = :.3f}, \t{h = :.3f}, \t{bearing = :.3f}, \t{fwd = :.3f}, \t{rot = :.3f}, \tdist = {dist if dist is not None else -8888:.3f}")
 
 			# Turn bearing then go straight...
-			#cls.set_velocity(cls.MAX_ROBOT_VEL,cls.MAX_ROBOT_ROT)
+			# cls.set_velocity(0,0)
 			PathProcess.new_path([(fwd, rot, None, bearing), (fwd, 0, None, None)])
 
 		# fwd, rot, dist = cls.move_into_path('longest', debug_img, visout.contours, handle_outer=False, force_forward=True)

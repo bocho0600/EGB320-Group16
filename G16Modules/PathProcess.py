@@ -1,5 +1,6 @@
 from threading import Thread, Lock
 from .Globals import *
+from .Vision import VisionModule
 import time
 from math import sin, cos
 import numpy as np
@@ -25,7 +26,6 @@ class PathProcess:
     track_points2 = None
 
     integration_lock = Lock()
-
 
 
     @classmethod
@@ -125,6 +125,7 @@ class PathProcess:
             delta = now - cls.last_integrated
 
             fwd, rot = cls.currentSpeed()
+            rot = -rot # AARGG
             h0 = cls.track_h
             if rot == 0:
                 h1 = h0
@@ -143,6 +144,11 @@ class PathProcess:
 
     @classmethod
     def transform_world_to_bot(cls, coords):
+        if coords is None:
+            return np.array([])
+        elif len(coords)<1:
+            return coords
+        
         x,y,h = cls.get_current_track()
         rc = coords.T - np.array([[x],[y]])
         rc = np.matmul(np.array([[cos(h),sin(h)],[sin(h),-cos(h)]]), rc)
@@ -150,6 +156,11 @@ class PathProcess:
 
     @classmethod
     def transform_bot_to_world(cls, coords):
+        if coords is None:
+            return np.array([])
+        elif len(coords)<1:
+            return coords
+        
         x,y,h = cls.get_current_track()
         rc = np.matmul(np.array([[cos(h),sin(h)],[sin(h),-cos(h)]]), coords.T)
         rc = rc + np.array([[x],[y]])
@@ -170,23 +181,20 @@ class PathProcess:
 
     @classmethod
     def get_tracked_points_relative(cls, bank=0):
+        cls.integrate()
         if bank==0:
             return cls.transform_world_to_bot(cls.track_points)
         else:
             return cls.transform_world_to_bot(cls.track_points2)
 
-    @classmethod
-    def process_tracked_points(cls, bank=0):
-        # Delete points which are in view, behind robot, or too far away
-        relative = cls.get_tracked_points_relative(bank)
-        del1_mask = relative[:, 0] < 0 # Behind
-        del2_mask = np.abs(np.arctan2(relative[:, 1], relative[:, 0])) < FOV_HORIZONTAL # We can see it
-        del3_mask = relative[:, 0]**2+relative[:, 1]**2 > 0.5**2 # Too far away
-        if bank==0:
-            cls.track_points = cls.track_points[~(del1_mask | del2_mask | del3_mask), :]
-        else:
-            cls.track_points2 = cls.track_points2[~(del1_mask | del2_mask | del3_mask), :]
 
+
+    @classmethod
+    def clear_tracked_points(cls, bank=0):
+        if bank==0:
+            cls.track_points = None
+        else:
+            cls.track_points2 = None
     
     @classmethod
     def get_current_track(cls):

@@ -15,8 +15,8 @@ if __name__ == "__main__":
 
     VisionModule.calculate_projection_transform()
     
-    p1 = VisionModule.project_point_to_ground(test_cases)
-    p2 = VisionModule.project_point_to_screen(p1)
+    p1 = VisionModule.project_to_ground(test_cases)
+    p2 = VisionModule.project_to_screen(p1)
 
 
     print(" IN ")

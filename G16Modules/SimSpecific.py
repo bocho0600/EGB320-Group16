@@ -43,7 +43,8 @@ class SimSpecific:
     @classmethod
     def get_image(cls):
         _, img = cls.packerBotSim.GetCameraImage()
-
+        if img is None:
+            return None, None, None
         
         # img = np.reshape((np.array(img).astype(np.uint8)), (480,640,3))
         img = cv2.flip(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), 0)

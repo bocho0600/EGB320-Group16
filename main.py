@@ -23,18 +23,21 @@ def main(): # Main function
 
 
 		NavigationModule.am_proximity_thresh = 0.2
-		NavigationModule.am_target_x,NavigationModule.am_target_y = (0.8, 0.5)
-		NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
+		NavigationModule.am_target_x,NavigationModule.am_target_y = (0.8, 0.25)
+		NavigationModule.init(STATE.AVOID_MOVE, instructions, starting_instruction)
 		t1 = time.time()
 
-		pipeline = 'debug_distmap'
+		pipeline = 'nav'
 		draw = True
 
 		while True:
 		
 			if pipeline == 'debug_distmap':
 				# Run vision and most CPU-intensive nav code but don't move
-				robotview, visout = VisionModule.Pipeline(False)
+				robotview, visout = VisionModule.Pipeline(draw)
+				if robotview is None:
+					continue
+
 				points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
 				#points = VisionModule.handle_outer_contour(points)
 				points, projected_floor = VisionModule.project_and_filter_contour(points)
@@ -50,6 +53,9 @@ def main(): # Main function
 						cv2.line(projection_image, (0, SCREEN_HEIGHT-100), (SCREEN_WIDTH-1, SCREEN_HEIGHT-100), (0,0,255), 1)		
 						for i in range(len(projected_floor)):
 							cv2.drawMarker(projection_image, tuple((np.array([SCREEN_WIDTH/2, SCREEN_HEIGHT])+np.array([100, -100])*projected_floor[i, ::-1]).astype(np.int32)), (255,255,255), cv2.MARKER_DIAMOND, 4)
+						for point in VisionModule.project_to_ground(np.array([s[0] for s in visout.shelfCorners])):
+							cv2.drawMarker(projection_image, tuple((np.array([SCREEN_WIDTH/2, SCREEN_HEIGHT])+np.array([100, -100])*point[::-1]).astype(np.int32)), (0, 0,255), cv2.MARKER_CROSS, 7)
+
 				else:
 					print("No shelf points found")
 					if draw:
@@ -68,6 +74,9 @@ def main(): # Main function
 				NavigationModule.current_state = STATE.VEGETABLE
 				NavigationModule.set_velocity(0,0)
 				robotview = VisionModule.DebugPipeline(draw)
+				if robotview is None:
+					continue
+				
 
 				if draw:
 					VisionModule.ExportImage("RobotView", robotview, FPS = True)
@@ -78,6 +87,9 @@ def main(): # Main function
 			elif pipeline == 'nav':
 				# Full navigation move to the desired shelf
 				robotview, visout = VisionModule.Pipeline(draw)
+				if robotview is None:
+					continue
+				
 				# print(marker_distance, marker_bearing)
 				
 				if draw:

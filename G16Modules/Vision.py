@@ -57,7 +57,12 @@ class VisionModule:
 		cls.screen_r_camera = np.array([0.5 / np.tan(FOV_HORIZONTAL/2),0,0])
 
 	@classmethod
-	def project_point_to_ground(cls,screen_coords):
+	def project_to_ground(cls,screen_coords):
+		if screen_coords is None:
+			return None
+		elif len(screen_coords)<1:
+			return screen_coords
+		
 		x = screen_coords[:, 0]
 		y = screen_coords[:, 1]
 
@@ -77,7 +82,12 @@ class VisionModule:
 		return rpo[0:2,:].T
 
 	@classmethod
-	def project_point_to_screen(cls, ground_coords):
+	def project_to_screen(cls, ground_coords):
+		if ground_coords is None:
+			return None
+		elif len(ground_coords)<1:
+			return ground_coords
+		
 		# Coordinates on the ground plane, relative to robot
 		rx = ground_coords[:, 0]
 		ry = ground_coords[:, 1]
@@ -170,7 +180,7 @@ class VisionModule:
 			contour_points = contour_points[np.unique(contour_points[:, 0]+ 1.0-contour_points[:, 1]/SCREEN_HEIGHT, return_index=True)[1], :]
 
 			# project contour onto the ground
-			projection = cls.project_point_to_ground(contour_points)
+			projection = cls.project_to_ground(contour_points)
 
 			# discard points above the horizon
 			mask = projection[:, 0] >= 0
@@ -220,8 +230,11 @@ class VisionModule:
 	#region Pipelines
 	@classmethod
 	def DebugPipeline(cls, draw=True):
-		# Put pipeline for testing vision code.
+		# Pipeline for testing vision code.
 		img, imgHSV, robotview = Specific.get_image()
+		if img is None:
+			print("Failed getting image")
+			return
 
 		# Detect shelves in the HSV image
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
@@ -232,13 +245,8 @@ class VisionModule:
 		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", draw)
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
 
-		contoursSAO = cv2.findContours(ShelfMask & ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-		contoursSAO = [cnt for cnt in contoursSAO if cv2.contourArea(cnt) > 150]
-
-		if contoursLoadingArea is not None and len(contoursLoadingArea) > 0:
-			x, y, width, height = cv2.boundingRect(contoursLoadingArea[0]) #todo filter largest allow obstacle 
-			if draw:
-				cv2.rectangle(robotview, (x, y), (x + width, y + height), (0,255,255), 1)
+		contoursSAO, _ = cv2.findContours(ShelfMask | ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+		contoursSAO = [cnt for cnt in contoursSAO if cnt is not None and len(cnt)>0 and cv2.contourArea(cnt) > 150]
 
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
@@ -251,12 +259,20 @@ class VisionModule:
 		
 		ShelfCorners = cls.ProcessShelfCorners(contoursSAO, robotview, draw=True)
 		
+		if contoursLoadingArea is not None and len(contoursLoadingArea) > 0:
+			x, y, width, height = cv2.boundingRect(contoursLoadingArea[0]) #todo filter largest allow obstacle 
+			if draw:
+				cv2.rectangle(robotview, (x, y), (x + width, y + height), (0,255,255), 1)
+
 		return robotview
 
 	@classmethod
 	def Pipeline(cls, draw=True):
 		# Pipeline for use with navigation
 		img, imgHSV, robotview = Specific.get_image()
+		if img is None:
+			print("Failed getting image")
+			return None, None
 
 		# Detect shelves in the HSV image
 		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 100, cv2.CHAIN_APPROX_NONE)
@@ -267,8 +283,8 @@ class VisionModule:
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", False)
 		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", False)
 
-		contoursSAO = cv2.findContours(ShelfMask & ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-		contoursSAO = [cnt for cnt in contoursSAO if cv2.contourArea(cnt) > 150]
+		contoursSAO, _ = cv2.findContours(ShelfMask | ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+		contoursSAO = [cnt for cnt in contoursSAO if cnt is not None and len(cnt)>0 and cv2.contourArea(cnt) > 150]
 
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
@@ -299,13 +315,7 @@ class VisionModule:
 
 	#endregion
 
-	# @staticmethod
-	# def PrintPixel(event, x, y, flags, param):
-	# 	if flags & 1:
-	# 		pixel = param[y, x, :]
-	# 		print(pixel)
-
-
+	#region Image Utils
 	@classmethod # Includes code to measure FPS and draw it onto the image frame
 	def ExportImage(cls, WindowName, view, FPS=False):
 		if FPS:
@@ -328,8 +338,9 @@ class VisionModule:
 		
 		cv2.imshow("Quick Debug", imgRGB)
 		cv2.waitKey(1)
+	#endregion
 
-
+	#region Detection
 	@classmethod
 	def findBlack(cls, imgHSV):
 		# Create masks for the orange color
@@ -583,8 +594,9 @@ class VisionModule:
 			return detected_objects
 		else:
 			return None
+	#endregion
 
-	#region Experimental
+	#region Shelf Corners
 	@staticmethod
 	def is_edge_line(pt1, pt2, image_width, image_height):
 		"""Check if the line touches the edges of the frame."""
@@ -592,7 +604,12 @@ class VisionModule:
 		x2, y2 = pt2
 
 		# If both points lie on the image boundary (edges), consider it an edge line
-		if (x1 == 0 or x1 == image_width-1 or y1 == 0 or y1 == image_height-1) and (x2 == 0 or x2 == image_width-1 or y2 == 0 or y2 == image_height-1):
+		if (
+			(x1 == 0 or x1 == image_width-1 or
+			 y1 == 0) and# or y1 == image_height-1) and
+			(x2 == 0 or x2 == image_width-1 or
+			 y2 == 0)# or y2 == image_height-1)
+			):
 			return True
 		return False
 
@@ -673,7 +690,7 @@ class VisionModule:
 						# One Horizontal and one vertical
 						if vert1:
 							# Horizontal Line must extend downwards
-							if ang2 < 0:
+							if ang2 < -20 and ang2 > -160:
 								continue
 							
 							imp_ang = ang2
@@ -686,7 +703,7 @@ class VisionModule:
 						
 						elif vert2:
 							# Horizontal Line must extend downwards
-							if ang1 < 0:
+							if ang1 < -20 and ang1 > -160:
 								continue
 
 							imp_ang = ang1
