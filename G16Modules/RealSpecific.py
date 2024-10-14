@@ -5,9 +5,15 @@ import time
 from threading import Thread
 import numpy as np
 from .RP2040 import I2C
-I2C.init()
 from .Mobility import MobilityModule
+
+
+time.sleep(1)
+I2C.init()
 from .ItemCollection import ItemCollectionModule
+time.sleep(1)
+ItemCollectionModule.gripper_open()
+
 
 class RealSpecific:
 
@@ -70,6 +76,8 @@ class RealSpecific:
 		cls.leds(0b101)
 		time.sleep(0.3)
 		cls.leds(0b000)
+		time.sleep(0.3)
+		cls.item_collection("OPEN")
 
 
 

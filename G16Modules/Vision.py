@@ -53,6 +53,9 @@ class VisionModule:
 		cls.normal_camera = np.matmul(cls.robot_to_camera_rotate , np.array([[0,0,1,1]]).T)[0:3, 0]
 		cls.r_camera = np.matmul(cls.robot_to_camera , np.array([[0,0,0,1]]).T)[0:3, 0]
 
+		cls.screen_normal_camera = np.array([-1,0,0])
+		cls.screen_r_camera = np.array([0.5 / np.tan(FOV_HORIZONTAL/2),0,0])
+
 	@classmethod
 	def project_point_to_ground(cls,screen_coords):
 		x = screen_coords[:, 0]
@@ -61,7 +64,7 @@ class VisionModule:
 		# Coordinates on a plane in front of the camera, relative to camera
 		cx = -(x-SCREEN_WIDTH/2) / SCREEN_WIDTH
 		cy = -(y-SCREEN_HEIGHT/2) / SCREEN_WIDTH
-		cz = 1 / FOV_HORIZONTAL * np.ones(cx.shape)
+		cz = 0.5 / np.tan(FOV_HORIZONTAL/2) * np.ones(cx.shape)
 		cpi = np.array([cz,-cx,cy])
 
 
@@ -72,6 +75,29 @@ class VisionModule:
 		# coodinates on the ground, relative to robot
 		rpo = np.matmul(cls.camera_to_robot, cpo)
 		return rpo[0:2,:].T
+
+	@classmethod
+	def project_point_to_screen(cls, ground_coords):
+		# Coordinates on the ground plane, relative to robot
+		rx = ground_coords[:, 0]
+		ry = ground_coords[:, 1]
+		rz = np.zeros(rx.shape)
+		rw = np.ones(rx.shape)
+		rpi = np.array([rx,ry,rz,rw])
+		
+		# Relative to camera
+		cpi = np.matmul(cls.robot_to_camera, rpi)[0:3, :]
+
+
+		# coordinates on the ground, relative to camera
+		cpo = np.dot(cls.screen_normal_camera, cls.screen_r_camera) / np.dot(cls.screen_normal_camera, cpi) * cpi
+		
+		x =  cpo[1, :] * SCREEN_WIDTH + SCREEN_WIDTH/2
+		y = -cpo[2, :] * SCREEN_WIDTH + SCREEN_HEIGHT/2
+		
+
+		
+		return np.c_[x, y]
 
 
 	@staticmethod
@@ -125,14 +151,15 @@ class VisionModule:
 		return combined_contour
 
 	@classmethod
-	def handle_outer_contour(cls, combined_contour):
+	def handle_outer_contour(cls, combined_contour, value=SCREEN_HEIGHT-1):
+		# *** ONLY does the OUTER ones !!
 		if combined_contour is not None:
 			# add a 0 point before and after so that the dist map counts blank spaces as close walls and will turn away from it and towards a shelf.
 			# This will cause problems when trying to leave an aisle so don't call it in that case.
 			if combined_contour[0,0] > 1: # any with 0 were removed so first being =1 is acceptable
-				combined_contour = np.r_[[[combined_contour[0,0]-1, SCREEN_HEIGHT-1, 0]], combined_contour]
+				combined_contour = np.r_[[[combined_contour[0,0]-1, value, 0]], combined_contour]
 			if combined_contour[-1,0] < SCREEN_WIDTH-2:# any with SCREEN_WIDTH-1 were removed so first being =SCREEN_WIDTH-2 is acceptable
-				combined_contour = np.r_[combined_contour, [[combined_contour[-1,0]+1, SCREEN_HEIGHT-1, 0]]]
+				combined_contour = np.r_[combined_contour, [[combined_contour[-1,0]+1, value, 0]]]
 		return combined_contour
 
 
@@ -203,8 +230,10 @@ class VisionModule:
 		contoursItem, ItemMask = cls.findItems(imgHSV)
 
 		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", draw)
-
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", draw)
+
+		contoursSAO = cv2.findContours(ShelfMask & ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+		contoursSAO = [cnt for cnt in contoursSAO if cv2.contourArea(cnt) > 150]
 
 		if contoursLoadingArea is not None and len(contoursLoadingArea) > 0:
 			x, y, width, height = cv2.boundingRect(contoursLoadingArea[0]) #todo filter largest allow obstacle 
@@ -213,14 +242,14 @@ class VisionModule:
 
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
-		ContoursMarkers, mask1 = cls.findMarkers(WallRGB, WallMask)
+		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, draw=draw)
 
 		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
 		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
 		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
 		
-		ShelfCorners = cls.ProcessShelfCorners(contoursShelf, robotview, draw=True)
+		ShelfCorners = cls.ProcessShelfCorners(contoursSAO, robotview, draw=True)
 		
 		return robotview
 
@@ -237,18 +266,22 @@ class VisionModule:
 
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", False)
 		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", False)
-		detected_wall = cls.ProcessContoursObject(contoursWall1, robotview, (127,127,127), "Wall", False)
-		
+
+		contoursSAO = cv2.findContours(ShelfMask & ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+		contoursSAO = [cnt for cnt in contoursSAO if cv2.contourArea(cnt) > 150]
+
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
-		ContoursMarkers, mask1 = cls.findMarkers(WallRGB, WallMask)
+		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
 		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, draw=draw)
 
+		detected_wall = cls.ProcessContoursObject(contoursWall1, robotview, (127,127,127), "Wall", False)
+		
 		# combine shelf+obstacle (things we want to avoid), filter contours and sort the remaining ones by their area
 		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
 		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
 		
-		ShelfCorners = cls.ProcessShelfCorners(contoursShelf, robotview, draw=draw)
+		ShelfCorners = cls.ProcessShelfCorners(contoursSAO, robotview, draw=draw)
 
 		return robotview, VisionOutput(
 			aisle=aisle,
@@ -261,7 +294,8 @@ class VisionModule:
 			detected_shelves=detected_shelves, 
 			detected_wall=detected_wall,
 			contoursLoadingArea=contoursLoadingArea,
-			shelfCorners=ShelfCorners)
+			shelfCorners=ShelfCorners,
+			contoursSAO=contoursSAO)
 
 	#endregion
 
@@ -342,7 +376,7 @@ class VisionModule:
 	@classmethod
 	def findObstacle(cls, imgHSV, area_threshold=100, chain=cv2.CHAIN_APPROX_SIMPLE):
 		ObstacleMask = cv2.inRange(imgHSV, cls.color_ranges['green'][0], cls.color_ranges['green'][1])
-		ObstacleMask = cv2.morphologyEx(ObstacleMask, cv2.MORPH_DILATE, np.ones((20,20)))
+		#ObstacleMask = cv2.morphologyEx(ObstacleMask, cv2.MORPH_DILATE, np.ones((20,20)))
 		contoursObstacle, _ = cv2.findContours(ObstacleMask, cv2.RETR_EXTERNAL, chain)
 
 		# Filter out small contours by area
@@ -391,13 +425,13 @@ class VisionModule:
 		return WallImg, WallImgGray, filledWallMask, contoursWall1
 
 	@classmethod # Returns markers contours inside wall. Need to call findWall first
-	def findMarkers(cls, WallRGB, WallMask):
-		mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
-		# _, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+	def findMarkers(cls, WallImgGray, WallMask):
+		# mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
+		_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
 		markers = cv2.bitwise_and(WallMask, mask)
-		# _, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
+		_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
 		ContoursMarkers, _ = cv2.findContours(markers, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		return ContoursMarkers, markers
+		return ContoursMarkers, mask1
 	
 	@classmethod # Input: marker contours, Output: marker avg center, bearing, distance, count (aisle number). Would be nice to tell if any markers are blocked
 	def GetInfoMarkers(cls, robotview, ContoursMarkers, draw=True):

@@ -57,7 +57,7 @@ def main():
                   # ret, WM = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
                   # inverted_loading_bay_mask = cv2.bitwise_not(LoadingBayMask)
                   # masked_wall = cv2.bitwise_and(WM, inverted_loading_bay_mask)
-
+                  
                   cam.DisplayFrame(frame_id, FPS=True, frame=RobotView, frame1 = WallMask) # Display the frame with the detected objects.
                   # Break the loop if 'q' is pressed
                   if cv2.waitKey(1) & 0xFF == ord('q'):

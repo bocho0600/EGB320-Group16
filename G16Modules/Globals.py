@@ -41,7 +41,7 @@ else:
 	# DIST_Z = 0.109 # cameraHeightFromFloor
 	# TILT = -8.785 * pi / 180
 
-	# Kelvin's chassis
+	# New chassis
 	DIST_X = 0.15 # cameraDistanceFromRobotCenter
 	DIST_Z = 0.122 # cameraHeightFromFloor
 	TILT = 4.677 * pi / 180

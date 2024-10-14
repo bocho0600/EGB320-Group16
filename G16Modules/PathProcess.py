@@ -2,6 +2,7 @@ from threading import Thread, Lock
 from .Globals import *
 import time
 from math import sin, cos
+import numpy as np
 
 class PathProcess:
 
@@ -16,7 +17,16 @@ class PathProcess:
     rotlen = None
     completed = True
 
+    # points in global coordinates that we want to keep track of
+    # e.g. shelf corners to avoid
+    # nav will want to use them in coordinates relative to the robot though (to add and read)
+    # Also when we change target or re-localize we should also either update or clear the points.
+    track_points = None
+    track_points2 = None
+
     integration_lock = Lock()
+
+
 
     @classmethod
     def motorLoop(cls):
@@ -89,7 +99,15 @@ class PathProcess:
             cls.last_integrated = None
 
     @classmethod
-    def localize(cls, x, y, h):
+    def localize(cls, x, y, h, update_tracked_points=True):
+        
+        if update_tracked_points and cls.last_integrated is not None:
+            lx, ly, _ = cls.get_current_track()
+            dx = x - lx
+            dy = y - ly
+            cls.track_points = cls.track_points + np.array([[dx, dy]])
+            cls.track_points2 = cls.track_points2 + np.array([[dx, dy]])
+
         with cls.integration_lock:
             cls.track_x = x
             cls.track_y = y
@@ -122,6 +140,53 @@ class PathProcess:
             cls.track_h = h1
 
             cls.last_integrated = now
+
+    @classmethod
+    def transform_world_to_bot(cls, coords):
+        x,y,h = cls.get_current_track()
+        rc = coords.T - np.array([[x],[y]])
+        rc = np.matmul(np.array([[cos(h),sin(h)],[sin(h),-cos(h)]]), rc)
+        return rc.T
+
+    @classmethod
+    def transform_bot_to_world(cls, coords):
+        x,y,h = cls.get_current_track()
+        rc = np.matmul(np.array([[cos(h),sin(h)],[sin(h),-cos(h)]]), coords.T)
+        rc = rc + np.array([[x],[y]])
+        return rc.T
+
+    @classmethod
+    def add_tracked_point_relative(cls, point, bank=0):
+        if bank==0:
+            if cls.track_points is None or len(cls.track_points) < 1:
+                cls.track_points = cls.transform_bot_to_world(np.array([point]))
+            else:
+                cls.track_points = np.r_[cls.track_points, cls.transform_bot_to_world(np.array([point]))]
+        else:
+            if cls.track_points2 is None or len(cls.track_points2) < 1:
+                cls.track_points2 = cls.transform_bot_to_world(np.array([point]))
+            else:
+                cls.track_points2 = np.r_[cls.track_points2, cls.transform_bot_to_world(np.array([point]))]
+
+    @classmethod
+    def get_tracked_points_relative(cls, bank=0):
+        if bank==0:
+            return cls.transform_world_to_bot(cls.track_points)
+        else:
+            return cls.transform_world_to_bot(cls.track_points2)
+
+    @classmethod
+    def process_tracked_points(cls, bank=0):
+        # Delete points which are in view, behind robot, or too far away
+        relative = cls.get_tracked_points_relative(bank)
+        del1_mask = relative[:, 0] < 0 # Behind
+        del2_mask = np.abs(np.arctan2(relative[:, 1], relative[:, 0])) < FOV_HORIZONTAL # We can see it
+        del3_mask = relative[:, 0]**2+relative[:, 1]**2 > 0.5**2 # Too far away
+        if bank==0:
+            cls.track_points = cls.track_points[~(del1_mask | del2_mask | del3_mask), :]
+        else:
+            cls.track_points2 = cls.track_points2[~(del1_mask | del2_mask | del3_mask), :]
+
     
     @classmethod
     def get_current_track(cls):
