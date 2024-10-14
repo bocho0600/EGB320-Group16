@@ -34,20 +34,12 @@ class ItemCollectionModule:
 
     @classmethod
     def lifter_up(cls,seconds=1):
-<<<<<<< HEAD
-        #I2C.ServoWrite(2, 120)
-=======
->>>>>>> 1449e70078591959a53994e860ed98426cebfe52
         I2C.ServoWrite(2, 140)
         time.sleep(seconds)
         cls.lifter_stop()
 
     @classmethod
     def lifter_down(cls,seconds=1):
-<<<<<<< HEAD
-        # I2C.ServoWrite(2, 60)
-=======
->>>>>>> 1449e70078591959a53994e860ed98426cebfe52
         I2C.ServoWrite(2, 40)
         time.sleep(seconds)
         cls.lifter_stop()
@@ -56,9 +48,6 @@ class ItemCollectionModule:
     def lifter_stop(cls):
         I2C.ServoWrite(2, 90)
 
-<<<<<<< HEAD
-ItemCollectionModule.lifter_up(seconds=30)
-=======
 
     prev_height = None
     ave_up_speed = None
@@ -85,4 +74,3 @@ ItemCollectionModule.lifter_up(seconds=30)
 
 
 
->>>>>>> 1449e70078591959a53994e860ed98426cebfe52
