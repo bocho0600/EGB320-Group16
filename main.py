@@ -22,9 +22,7 @@ def main(): # Main function
 		starting_instruction = 3
 
 
-		NavigationModule.am_proximity_thresh = 0.2
-		NavigationModule.am_target_x,NavigationModule.am_target_y = (0.8, 0.25)
-		NavigationModule.init(STATE.AVOID_MOVE, instructions, starting_instruction)
+		NavigationModule.init(STATE.AISLE_OUT, instructions, starting_instruction)
 		t1 = time.time()
 
 		pipeline = 'nav'
