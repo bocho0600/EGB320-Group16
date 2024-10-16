@@ -56,7 +56,7 @@ class I2C:
 
         # Prepare the command string
         command = f"S{number} {angle}"
-        print(f"Sending command to servo: {command}")
+        #print(f"Sending command to servo: {command}")
 
         try:
             # Send the command to the Arduino
@@ -78,7 +78,7 @@ class I2C:
             print("Invalid direction. Please choose between 0, 1 or 'S' for STOP.")
             return
         command = f"M{number} {direction} {speed}"
-        print(f"Sending command to servo: {command}")
+        #print(f"Sending command to motor: {command}")
         try:
             # Send the command to the Arduino
             ascii_array = cls.string_to_ascii_array(command)

@@ -1,6 +1,6 @@
 import RPi.GPIO as GPIO
 import time
-from RP2040 import I2C
+from .RP2040 import I2C
 
 I2C.init(bus_number=1, addr=0x08)
 class ItemCollectionModule:
@@ -12,7 +12,7 @@ class ItemCollectionModule:
 
     @classmethod
     def gripper_close(cls,seconds=1):
-        I2C.ServoWrite(4, 110)
+        I2C.ServoWrite(4, 90)
         time.sleep(seconds)
         cls.gripper_stop()
 
@@ -30,17 +30,17 @@ class ItemCollectionModule:
 
     @classmethod
     def gripper_stop(cls):#greater num = close less num = open
-        I2C.ServoWrite(4, 90)
+        I2C.ServoWrite(4, 80)
 
     @classmethod
     def lifter_up(cls,seconds=1):
-        I2C.ServoWrite(2, 140)
+        I2C.ServoWrite(2, 160)
         time.sleep(seconds)
         cls.lifter_stop()
 
     @classmethod
     def lifter_down(cls,seconds=1):
-        I2C.ServoWrite(2, 40)
+        I2C.ServoWrite(2, 30)
         time.sleep(seconds)
         cls.lifter_stop()
 
@@ -65,10 +65,10 @@ class ItemCollectionModule:
 
 
     @classmethod
-    def collect(h):
-        lift_to_height(h)
-        gripper_open(1)
-        gripper_close(20)
+    def collect(cls,h):
+        cls.lifter_up(h)
+        cls.gripper_open(1)
+        cls.gripper_close(20)
 
 
 
