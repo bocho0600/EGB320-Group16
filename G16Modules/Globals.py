@@ -10,7 +10,8 @@ is_video = False
 is_combined = False
 
 if is_combined:
-	FOV_HORIZONTAL = 60 * pi/180 # radians
+	CAMERA_FOV = 60
+	FOV_HORIZONTAL = CAMERA_FOV * pi/180 # radians
 
 	DIST_X = 0.07 # cameraDistanceFromRobotCenter
 	DIST_Z = 0.0752 # cameraHeightFromFloor
@@ -18,7 +19,8 @@ if is_combined:
 
 	from .CombinedSpecific import CombinedSpecific as Specific
 elif is_simulator:
-	FOV_HORIZONTAL = 60 * pi/180 # radians
+	CAMERA_FOV = 60
+	FOV_HORIZONTAL = CAMERA_FOV * pi/180 # radians
 
 	DIST_X = 0.07 # cameraDistanceFromRobotCenter
 	DIST_Z = 0.0752 # cameraHeightFromFloor
@@ -26,7 +28,8 @@ elif is_simulator:
 
 	from .SimSpecific import SimSpecific as Specific
 elif is_video:
-	FOV_HORIZONTAL = 64.4 * pi/180 # radians
+	CAMERA_FOV = 66
+	FOV_HORIZONTAL = CAMERA_FOV * pi/180 # radians
 
 	DIST_X = 0.09 # cameraDistanceFromRobotCenter
 	DIST_Z = 0.081 # cameraHeightFromFloor
@@ -34,7 +37,8 @@ elif is_video:
 	
 	from .VideoSpecific import VideoSpecific as Specific
 else:
-	FOV_HORIZONTAL = 64.4 * pi/180 # radians
+	CAMERA_FOV = 66
+	FOV_HORIZONTAL = CAMERA_FOV * pi/180 # radians
 
 	# Black chassis 1
 	# DIST_X = 0.09 # cameraDistanceFromRobotCenter
