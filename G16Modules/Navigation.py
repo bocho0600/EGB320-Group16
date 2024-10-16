@@ -31,11 +31,18 @@ PHASE = Enum('PHASE', [
 
 class NavigationModule:
 	
-	MAX_ROBOT_VEL = 0.13 # m/s
-	ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
-	Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
-	MAX_ROBOT_ROT = pi/5 # rad/s
-	RADIUS = 0.13 # how far to stay away from wall
+	if is_simulator:
+		MAX_ROBOT_VEL = 0.13 # m/s
+		ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
+		Kp = 2.4 # proportional term. beware if its too high we will try to go backwards for sharp turns
+		MAX_ROBOT_ROT = pi/5 # rad/s
+		RADIUS = 0.13 # how far to stay away from wall
+	else:
+		MAX_ROBOT_VEL = 0.13 # m/s
+		ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
+		Kp = 3.5 # proportional term. beware if its too high we will try to go backwards for sharp turns
+		MAX_ROBOT_ROT = pi/3 # rad/s
+		RADIUS = 0.20 # how far to stay away from wall
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):

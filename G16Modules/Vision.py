@@ -283,8 +283,8 @@ class VisionModule:
 		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", False)
 		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", False)
 
-		contoursSAO, _ = cv2.findContours(ShelfMask | ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-		contoursSAO = [cnt for cnt in contoursSAO if cnt is not None and len(cnt)>0 and cv2.contourArea(cnt) > 150]
+		# contoursSAO, _ = cv2.findContours(ShelfMask | ObstacleMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+		# contoursSAO = [cnt for cnt in contoursSAO if cnt is not None and len(cnt)>0 and cv2.contourArea(cnt) > 150]
 
 		# Detect wall and marker within
 		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
@@ -297,7 +297,7 @@ class VisionModule:
 		contours = [c for c in contoursShelf if cv2.contourArea(c) > 100] + [c for c in contoursObstacle if cv2.contourArea(c) > 100]
 		contours = sorted(contours, key=lambda cont: -cv2.contourArea(cont))
 		
-		ShelfCorners = cls.ProcessShelfCorners(contoursSAO, robotview, draw=draw)
+		# ShelfCorners = cls.ProcessShelfCorners(contoursSAO, robotview, draw=draw)
 
 		return robotview, VisionOutput(
 			aisle=aisle,
@@ -310,8 +310,9 @@ class VisionModule:
 			detected_shelves=detected_shelves, 
 			detected_wall=detected_wall,
 			contoursLoadingArea=contoursLoadingArea,
-			shelfCorners=ShelfCorners,
-			contoursSAO=contoursSAO)
+			# shelfCorners=ShelfCorners,
+			# contoursSAO=contoursSAO
+			)
 
 	#endregion
 
