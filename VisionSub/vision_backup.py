@@ -48,10 +48,10 @@ def main():
                   ContoursMarkers, mask1 = vision.findMarkers(WallImgGray, WallMask)
                   avg_center, avg_bearing, avg_distance, shape_count = vision.GetInfoMarkers(RobotView, ContoursMarkers, imgRGB)
                   
-                  if shape_count < 3:
-                        MobilityModule.Move(0, 20)
-                  else :
-                        MobilityModule.Move(0, 0)
+                  # if shape_count < 3:
+                  #       MobilityModule.Move(0, 20)
+                  # else :
+                  #       MobilityModule.Move(0, 0)
 
                   # gray = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY)
                   # ret, WM = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)

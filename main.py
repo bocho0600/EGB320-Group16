@@ -19,14 +19,24 @@ def main(): # Main function
 		Specific.start()
 		
 		VisionModule.calculate_projection_transform()
-		starting_instruction = 6
+		starting_instruction = 5
 
-
-		NavigationModule.init(STATE.LOST, instructions, starting_instruction)
-		t1 = time.time()
+																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																		
+		
 
 		pipeline = 'nav'
 		draw = True
+
+		
+
+
+		if pipeline == 'debug_distmap':
+			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
+		elif pipeline == 'debug':
+			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
+		elif pipeline == 'nav':
+			NavigationModule.init(STATE.LOST, instructions, starting_instruction)
+		t1 = time.time()
 
 		while True:
 		
@@ -36,16 +46,16 @@ def main(): # Main function
 				if robotview is None:
 					continue
 
-				points = VisionModule.combine_contour_points(visout.contours, exclude_horizontal_overlap=False)
+				points = VisionModule.combine_contour_points(visout.contoursShelf, exclude_horizontal_overlap=False)
 				#points = VisionModule.handle_outer_contour(points)
 				points, projected_floor = VisionModule.project_and_filter_contour(points)
 				if points is not None and points.shape[0] > 3:
 					dist_map = VisionModule.get_dist_map(points, projected_floor) # dist map column 0 is dist, column 1 is real point
-					safety_map = NavigationModule.expand_safety(dist_map)
+					#safety_map = NavigationModule.expand_safety(dist_map)
 
 					if draw:
 						robotview = cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - dist_map[:,0]/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 0), 1) # draw
-						robotview = cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
+						#robotview = cv2.polylines(robotview, [np.array([range(0, SCREEN_WIDTH), SCREEN_HEIGHT - safety_map/2 * SCREEN_HEIGHT]).T.astype(np.int32)], False, (0, 255, 255), 1) # draw
 						projection_image = np.zeros(robotview.shape)
 
 						cv2.line(projection_image, (0, SCREEN_HEIGHT-100), (SCREEN_WIDTH-1, SCREEN_HEIGHT-100), (0,0,255), 1)		

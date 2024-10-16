@@ -4,7 +4,7 @@ from math import pi
 SCREEN_WIDTH = 410
 SCREEN_HEIGHT = 308
 
-is_simulator = True
+is_simulator = False	
 is_hitl = False
 is_video = False
 is_combined = False
@@ -47,8 +47,8 @@ else:
 
 	# New chassis
 	DIST_X = 0.15 # cameraDistanceFromRobotCenter
-	DIST_Z =  0.109# cameraHeightFromFloor
-	TILT = 7.861 * pi / 180
+	DIST_Z =  0.089# cameraHeightFromFloor
+	TILT = 1.45 * pi / 180
 	
 	from .RealSpecific import RealSpecific as Specific
 

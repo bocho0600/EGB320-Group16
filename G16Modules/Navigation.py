@@ -39,10 +39,10 @@ class NavigationModule:
 		MAX_ROBOT_ROT = pi/5 # rad/s
 		RADIUS = 0.13 # how far to stay away from wall
 	else:
-		MAX_ROBOT_VEL = 0.13 # m/s
+		MAX_ROBOT_VEL = 0.16 # m/s
 		ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
-		Kp = 3.5 # proportional term. beware if its too high we will try to go backwards for sharp turns
-		MAX_ROBOT_ROT = pi/3 # rad/s
+		Kp = 4.0 # proportional term. beware if its too high we will try to go backwards for sharp turns
+		MAX_ROBOT_ROT = pi/5 # rad/s
 		RADIUS = 0.20 # how far to stay away from wall
 
 	@classmethod
@@ -406,7 +406,7 @@ class NavigationModule:
 
 			if not cls.checkContour(visout.contoursShelf):
 				cls.loa_stage = -1
-				return STATE.LOST_OUTSIDE_AISLE
+				return STATE.LOST_OUTSIDE_AISLE, debug_img
 			
 			away_corners = [c for c in visout.shelfCorners if c[1] == 'Away']
 
@@ -445,7 +445,7 @@ class NavigationModule:
 			# Consider using the corner angle to inform the stopping distance (we have that info in visout!)
 			if distance is not None and ((cls.target_aisle == 1 and distance < 0.35) or\
 				(cls.target_aisle == 2 and distance < 1.05) or\
-				(cls.target_aisle == 3 and distance < 0.35)):
+				(cls.target_aisle == 3 and distance < 0.55)):
 				if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
 					# shelf is on the right
 					cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen=2*pi)
@@ -571,7 +571,7 @@ class NavigationModule:
 		# try to move towards the marker, if we can't see the marker then use the longest safe path
 		# Once we reach target distance (or less) queue a blind_move into collect_item into blind_move to face out
 		# For bay3 an addition forward move is required
-
+		dist = None
 		if visout.marker_bearing is not None:
 			fwd, rot = cls.move_into_path(visout.marker_bearing, debug_img, visout.obstacles)
 			dist = visout.marker_distance / 100

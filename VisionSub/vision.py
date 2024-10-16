@@ -139,7 +139,7 @@ class VisionModule:
 
 
     def findMarkers(self, WallImgGray, WallMask):
-        _, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+        _, mask = cv2.threshold(WallImgGray, 150, 255, cv2.THRESH_BINARY_INV)
         markers = cv2.bitwise_and(WallMask, mask)
         _, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
         ContoursMarkers, _ = cv2.findContours(mask1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
