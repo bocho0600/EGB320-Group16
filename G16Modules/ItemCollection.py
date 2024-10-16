@@ -1,4 +1,3 @@
-import RPi.GPIO as GPIO
 import time
 from .RP2040 import I2C
 
