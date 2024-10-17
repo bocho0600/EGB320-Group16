@@ -357,29 +357,68 @@ class VisionModule:
 
 		return contoursObstacle, ObstacleMask
 	
+	# @classmethod
+	# def findWall(cls, imgHSV, imgRGB):
+	# 	# Create masks for the orange color (wall detection)
+	# 	WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
+		
+	# 	# Find contours in the mask
+	# 	contoursWall1, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		
+	# 	# Check if any contours are found
+	# 	if contoursWall1:
+	# 		contoursWall1 = sorted(contoursWall1, key=cv2.contourArea, reverse=True)
+
+	# 		# Create an empty mask and draw the convex hull on it
+	# 		filledWallMask = np.zeros_like(WallMask)
+
+			
+	# 		# Find the 2 largest contours
+	# 		for largest_contour in contoursWall1[:2]:
+	# 			if cv2.contourArea(largest_contour) > 400: # some threshold
+	# 				# Calculate the convex hull of the largest contour
+	# 				#hull = cv2.convexHull(largest_contour)
+					
+	# 				cv2.drawContours(filledWallMask, [largest_contour], -1, (255), thickness=cv2.FILLED)
+			
+	# 		# Apply Gaussian blur to the filled mask
+	# 		filledWallMask = cv2.GaussianBlur(filledWallMask, (9, 9), 2)
+			
+	# 		# Use the filled mask to extract the wall image
+	# 		WallImg = cv2.bitwise_and(imgRGB, imgRGB, mask=filledWallMask)
+			
+	# 		# Convert the extracted image to grayscale
+	# 		WallImgGray = cv2.cvtColor(WallImg, cv2.COLOR_BGR2GRAY)
+	# 	else:
+	# 		# No contours found, return original image and empty mask
+	# 		WallImg = np.zeros_like(imgRGB)
+	# 		WallImgGray = np.zeros_like(cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY))
+	# 		filledWallMask = np.zeros_like(WallMask)
+
+	# 	return WallImg, WallImgGray, filledWallMask, contoursWall1
+
+	##
 	@classmethod
 	def findWall(cls, imgHSV, imgRGB):
 		# Create masks for the orange color (wall detection)
-		WallMask = cv2.inRange(imgHSV, cls.color_ranges['wall'][0], cls.color_ranges['wall'][1])
-		
+		gray = cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY)
+		ret, WallMask = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
+		#WallMask = cv2.inRange(imgHSV, self.color_ranges['wall'][0], self.color_ranges['wall'][1])
+
 		# Find contours in the mask
 		contoursWall1, _ = cv2.findContours(WallMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 		
 		# Check if any contours are found
 		if contoursWall1:
-			contoursWall1 = sorted(contoursWall1, key=cv2.contourArea, reverse=True)
-
+			# Find the largest contour
+			largest_contour = max(contoursWall1, key=cv2.contourArea)
+			
+			# Calculate the convex hull of the largest contour
+			#hull = cv2.convexHull(largest_contour)
+			
 			# Create an empty mask and draw the convex hull on it
 			filledWallMask = np.zeros_like(WallMask)
-
-			
-			# Find the 2 largest contours
-			for largest_contour in contoursWall1[:2]:
-				if cv2.contourArea(largest_contour) > 400: # some threshold
-					# Calculate the convex hull of the largest contour
-					hull = cv2.convexHull(largest_contour)
-					
-					cv2.drawContours(filledWallMask, [hull], -1, (255), thickness=cv2.FILLED)
+			cv2.drawContours(filledWallMask, [largest_contour], -1, (255), thickness=cv2.FILLED)
 			
 			# Apply Gaussian blur to the filled mask
 			filledWallMask = cv2.GaussianBlur(filledWallMask, (9, 9), 2)
@@ -389,13 +428,16 @@ class VisionModule:
 			
 			# Convert the extracted image to grayscale
 			WallImgGray = cv2.cvtColor(WallImg, cv2.COLOR_BGR2GRAY)
+			largest_contour = np.array([largest_contour])
 		else:
 			# No contours found, return original image and empty mask
+			largest_contour = contoursWall1
 			WallImg = np.zeros_like(imgRGB)
 			WallImgGray = np.zeros_like(cv2.cvtColor(imgRGB, cv2.COLOR_BGR2GRAY))
 			filledWallMask = np.zeros_like(WallMask)
 
-		return WallImg, WallImgGray, filledWallMask, contoursWall1
+		return WallImg, WallImgGray, filledWallMask, largest_contour
+	##
 
 	@classmethod # Returns markers contours inside wall. Need to call findWall first
 	def findMarkers(cls, WallImgGray, WallMask):

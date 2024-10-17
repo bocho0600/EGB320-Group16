@@ -44,7 +44,7 @@ class NavigationModule:
 		ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
 		Kp1 = 3.5 # FOR DRIVING
 		Kp2 = 1.8 # FOR FACING
-		MAX_ROBOT_ROT = pi/4 # rad/s
+		MAX_ROBOT_ROT = pi/3 # rad/s
 		RADIUS = 0.20 # how far to stay away from wall
 
 	@classmethod
@@ -180,7 +180,7 @@ class NavigationModule:
 
 	@classmethod
 	def compute_repulsive_field(cls, obstacles):
-		WORKER_WIDTH_SCALE = 0.10  # m
+		WORKER_WIDTH_SCALE = 0.12  # m
 		#CAMERA_FOV = 66
 		
 		repulsive_field = np.zeros(CAMERA_FOV + 1)
@@ -190,8 +190,13 @@ class NavigationModule:
 				obs_range = obs[0]
 				obs_bearing = obs[1]
 
+				
+
 				# only consider obstacles that are less than 1 metre away
 				if obs_range < 1:
+					# if obs_bearing > 0.7 * FOV_HORIZONTAL:
+					# 	obs_range /= 2
+
 					obs_deg = int(cls.rad_to_deg(obs_bearing) + CAMERA_FOV / 2)
 					
 					obs_width_rad = 2 * math.atan(WORKER_WIDTH_SCALE / obs_range)
@@ -462,7 +467,7 @@ class NavigationModule:
 			# This is the main section we need to tweak to not crash into the shelf
 			# Consider using the corner angle to inform the stopping distance (we have that info in visout!)
 			if distance is not None and ((cls.target_aisle == 1 and distance < 0.40) or\
-				(cls.target_aisle == 2 and distance < 1.25) or\
+				(cls.target_aisle == 2 and distance < 1.32) or\
 				(cls.target_aisle == 3 and ((cls.last_target_aisle >= 2 and distance < 0.55) or
 											(cls.last_target_aisle < 2 and distance < 0.40)))):
 				if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
@@ -597,19 +602,24 @@ class NavigationModule:
 			dist = visout.marker_distance / 100
 			
 		else:
-			#fwd, rot, dist = cls.move_into_path('longest', debug_img, visout.obstacles)
-			print ("This is a problem")
+			fwd, rot = cls.move_into_path(0, debug_img, visout.obstacles)
+			dist = 9999
+			# print ("This is a problem")
 			
 		if dist is None:
 			print ("This is a problem")
 
 
 		if cls.target_bay == 3:
-			margin = 0.4 
-			thresh = cls.target_bay_distance/100 + margin
+			margin = 0.4
+			thresh = cls.target_bay_distance/100 + margin # thresh to start blind move
+			d = cls.bay_width/2/100
 
 			if dist <= thresh:
-				PathProcess.new_path([(cls.MAX_ROBOT_VEL, 0, margin, None)])
+				if cls.target_side == "Right":
+					PathProcess.new_path([(cls.MAX_ROBOT_VEL, 0, margin-d, None), (cls.MAX_ROBOT_VEL/2, cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
+				else:
+					PathProcess.new_path([(cls.MAX_ROBOT_VEL, 0, margin-d, None), (cls.MAX_ROBOT_VEL/2, -cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
 				cls.next_state = STATE.COLLECT_ITEM
 				return STATE.BLIND_MOVE, debug_img
 			else:
@@ -710,11 +720,16 @@ class NavigationModule:
 	@classmethod
 	def COLLECT_ITEM_start(cls):
 		Specific.leds(0b110)
-		cls.collect_item_stage = 0
-		if cls.target_side == 'Right':
-			cls.set_velocity(0,cls.MAX_ROBOT_ROT,rotlen=pi/2)
+		if cls.target_bay != 3:
+			cls.collect_item_stage = 0
+			if cls.target_side == 'Right':
+				cls.set_velocity(0,cls.MAX_ROBOT_ROT,rotlen=2*pi/3)
+			else:
+				cls.set_velocity(0,-cls.MAX_ROBOT_ROT,rotlen=2*pi/3)
 		else:
-			cls.set_velocity(0,-cls.MAX_ROBOT_ROT,rotlen=pi/2)
+			cls.set_velocity(0,0)
+			cls.collect_item_stage = 1
+			cls.face_start = time.time()
 	
 	@classmethod
 	def COLLECT_ITEM_update(cls, delta, debug_img, visout):
@@ -733,7 +748,11 @@ class NavigationModule:
 			
 			if cls.checkContour(visout.contoursItem):
 				
-				largest_item = max(visout.contoursItem, key=lambda x:cv2.contourArea(x))
+				def item_center_x(cont):
+					x, y, w, h = cv2.boundingRect(cont)
+					return x + w/2
+
+				largest_item = min(visout.contoursItem, key=lambda cont:abs(item_center_x(cont) - SCREEN_WIDTH/2))
 
 				x, y, w, h = cv2.boundingRect(largest_item)
 				cx = x + w/2
@@ -770,20 +789,43 @@ class NavigationModule:
 		elif cls.collect_item_stage == 4:
 			# Close gripper
 			# Not implemented
-			cls.set_velocity(-2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
+			if cls.target_bay != 3:
+				cls.set_velocity(-2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
+			else:
+				if cls.target_side == 'Right':
+					PathProcess.new_path([(-cls.MAX_ROBOT_VEL/2, -cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
+				else:
+					PathProcess.new_path([(-cls.MAX_ROBOT_VEL/2, cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 5:
 			# Move backwards
 			if PathProcess.completed:
-				Specific.lifter_set(2)
-				if cls.target_side == 'Right':
-					cls.set_velocity(0,cls.MAX_ROBOT_ROT,rotlen=pi/2)
+				if cls.target_bay != 3:
+					if cls.target_side == 'Right':
+						cls.set_velocity(0,cls.MAX_ROBOT_ROT, rotlen=2*pi/3)
+					else:
+						cls.set_velocity(0,-cls.MAX_ROBOT_ROT, rotlen=2*pi/3)
 				else:
-					cls.set_velocity(0,-cls.MAX_ROBOT_ROT,rotlen=pi/2)
+					if cls.target_side == 'Right':
+						cls.set_velocity(0,cls.MAX_ROBOT_ROT, rotlen=pi)
+					else:
+						cls.set_velocity(0,-cls.MAX_ROBOT_ROT, rotlen=pi)
+
 				cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 6:
-			# Face outwards
+			# Move backwards
 			if PathProcess.completed:
+				Specific.lifter_set(2)
+
+				if cls.target_side == 'Right':
+					cls.set_velocity(0,cls.MAX_ROBOT_ROT)
+				else:
+					cls.set_velocity(0,-cls.MAX_ROBOT_ROT)
+				
+				cls.collect_item_stage += 1
+		elif cls.collect_item_stage == 7:
+			# Face outwards
+			if visout.marker_bearing is None and visout.detected_wall is not None:
 				cls.current_phase = PHASE.DROPOFF
 				return STATE.AISLE_OUT, debug_img
 
@@ -887,7 +929,7 @@ class NavigationModule:
 	def DROP_ITEM_start(cls):
 		Specific.leds(0b010)
 		cls.drop_item_stage = 0
-		cls.set_velocity(1.15*cls.MAX_ROBOT_VEL,0,fwdlen=0.60)
+		cls.set_velocity(1.1*cls.MAX_ROBOT_VEL,0,fwdlen=0.60)
 	
 	@classmethod
 	def DROP_ITEM_update(cls, delta, debug_img, visout):
@@ -895,7 +937,7 @@ class NavigationModule:
 
 		if cls.drop_item_stage == 0:
 			# Move forward
-			if PathProcess.completed or visout.marker_bearing is None:
+			if PathProcess.completed:
 				cls.set_velocity(0,0)
 				cls.drop_item_stage += 1
 		elif cls.drop_item_stage == 1:

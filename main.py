@@ -19,7 +19,7 @@ def main(): # Main function
 		Specific.start()
 		
 		VisionModule.calculate_projection_transform()
-		starting_instruction = 3
+		starting_instruction = 1
 
 		
 		pipeline = 'nav'
@@ -121,7 +121,7 @@ def main(): # Main function
 		Specific.end()
 
 if __name__ == "__main__": # Run the main function
-	CSV = csvread.CSVReader('Order_1.csv')
+	CSV = csvread.CSVReader('Order_2.csv')
 	CSV.read_csv()
 	instructions = CSV.RobotInstruction() # Generating robot instructions and print instructions
 
