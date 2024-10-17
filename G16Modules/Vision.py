@@ -220,7 +220,7 @@ class VisionModule:
 		return np.c_[dist_map, real_points]
 	#endregion
 
-	focal_length = 35 #mm
+	focal_length = 33 #mm # should be 35?
 	real_circle_diameter = 70 #mm
 
  
@@ -720,7 +720,7 @@ class VisionModule:
 	
 	@classmethod
 	def GetDistance(cls, width, real_width):
-		return (cls.focal_length * real_width) / width + 4
+		return (cls.focal_length * real_width) / width
 	
 	@classmethod
 	def GetBearing(cls, x_center): # RADIANS!!!

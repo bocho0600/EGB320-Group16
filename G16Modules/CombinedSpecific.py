@@ -93,7 +93,6 @@ class CombinedSpecific:
     def end(cls):
         cls.set_velocity(0,0)
         cls.leds(0b000)
-        cls.item_collection("STOP")
         cls.packerBotSim.StopSimulator()
         
 
@@ -111,24 +110,6 @@ class CombinedSpecific:
         cls.last_mask = mask
 
     @classmethod
-    def item_collection(cmd, time=1):
-        if cmd == "UP":
-            ItemCollectionModule.lifter_up(time)
-        elif cmd == "DOWN":
-            ItemCollectionModule.lifter_down(time)
-        elif cmd == "LSTOP":
-            ItemCollectionModule.lifter_stop()
-        elif cmd == "CLOSE":
-            ItemCollectionModule.gripper_close(time)
-        elif cmd == "OPEN":
-            ItemCollectionModule.gripper_open(time)
-        elif cmd == "HOLD":
-            ItemCollectionModule.gripper_hold(time)
-        elif cmd == "GSTOP":
-            ItemCollectionModule.gripper_stop()
-        elif cmd == "STOP":
-            ItemCollectionModule.stop_all()
-        else:
-            ItemCollectionModule.stop_all()
-            print("Invalid itemcollection command: stopping all")
+    def lifter_set(cls, h):
+        ItemCollectionModule.lifter_set(h)
 

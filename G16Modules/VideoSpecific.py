@@ -49,5 +49,6 @@ class VideoSpecific:
         pass
 
     @classmethod
-    def item_collection(cls, time=1):
+    def lifter_set(cls, h):
         pass
+

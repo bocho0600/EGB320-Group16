@@ -19,17 +19,13 @@ def main(): # Main function
 		Specific.start()
 		
 		VisionModule.calculate_projection_transform()
-		starting_instruction = 5
+		starting_instruction = 3
 
-																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																		
 		
-
 		pipeline = 'nav'
 		draw = True
 
 		
-
-
 		if pipeline == 'debug_distmap':
 			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
 		elif pipeline == 'debug':

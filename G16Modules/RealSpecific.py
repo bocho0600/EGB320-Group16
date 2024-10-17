@@ -57,7 +57,7 @@ class RealSpecific:
 	@classmethod
 	def set_velocity(cls, fwd, rot):
 		a = 470 # multiply m/s to get PWM value 0 to 255
-		rot_ms = rot * 0.185/2 # rad/s to m/s
+		rot_ms = rot * 0.155/2 # rad/s to m/s
 		MobilityModule.Move(int(fwd*a), int(rot_ms*a))
 		pass
 
@@ -69,6 +69,8 @@ class RealSpecific:
 			cls.frameGrabber = CamFrameGrabber(cls.camera, SCREEN_WIDTH, SCREEN_HEIGHT)
 			cls.frameGrabber.start()
 		
+		ItemCollectionModule.lifter_set(2)
+		time.sleep(0.3)
 		cls.leds(0b101)
 		time.sleep(0.3)
 		cls.leds(0b010)
@@ -77,7 +79,7 @@ class RealSpecific:
 		time.sleep(0.3)
 		cls.leds(0b000)
 		time.sleep(0.3)
-		cls.item_collection("OPEN")
+
 
 
 
@@ -93,7 +95,6 @@ class RealSpecific:
 		cls.camera.close()
 		cls.set_velocity(0,0)
 		cls.leds(0b000)
-		cls.item_collection("STOP")
 
 
 
@@ -110,26 +111,10 @@ class RealSpecific:
 		cls.last_mask = mask
 
 	@classmethod
-	def item_collection(cmd, time=1):
-		if cmd == "UP":
-			ItemCollectionModule.lifter_up(time)
-		elif cmd == "DOWN":
-			ItemCollectionModule.lifter_down(time)
-		elif cmd == "LSTOP":
-			ItemCollectionModule.lifter_stop()
-		elif cmd == "CLOSE":
-			ItemCollectionModule.gripper_close(time)
-		elif cmd == "OPEN":
-			ItemCollectionModule.gripper_open(time)
-		elif cmd == "HOLD":
-			ItemCollectionModule.gripper_hold(time)
-		elif cmd == "GSTOP":
-			ItemCollectionModule.gripper_stop()
-		elif cmd == "STOP":
-			ItemCollectionModule.stop_all()
-		else:
-			ItemCollectionModule.stop_all()
-			print("Invalid itemcollection command: stopping all")
+	def lifter_set(cls, h):
+		ItemCollectionModule.lifter_set(h)
+
+
 
 # Define the CamFrameGrabber class
 class CamFrameGrabber:

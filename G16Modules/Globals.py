@@ -28,7 +28,7 @@ elif is_simulator:
 
 	from .SimSpecific import SimSpecific as Specific
 elif is_video:
-	CAMERA_FOV = 66
+	CAMERA_FOV = 64
 	FOV_HORIZONTAL = CAMERA_FOV * pi/180 # radians
 
 	DIST_X = 0.09 # cameraDistanceFromRobotCenter
@@ -37,18 +37,19 @@ elif is_video:
 	
 	from .VideoSpecific import VideoSpecific as Specific
 else:
-	CAMERA_FOV = 66
+	CAMERA_FOV = 64
 	FOV_HORIZONTAL = CAMERA_FOV * pi/180 # radians
 
-	# Black chassis 1
-	# DIST_X = 0.09 # cameraDistanceFromRobotCenter
-	# DIST_Z = 0.109 # cameraHeightFromFloor
-	# TILT = -8.785 * pi / 180
 
-	# New chassis
-	DIST_X = 0.15 # cameraDistanceFromRobotCenter
-	DIST_Z =  0.089# cameraHeightFromFloor
-	TILT = 1.45 * pi / 180
+	# Brown chassis
+	# DIST_X = 0.15 # cameraDistanceFromRobotCenter
+	# DIST_Z =  0.089# cameraHeightFromFloor
+	# TILT = 1.45 * pi / 180
+
+	# White chassis
+	DIST_X = 0.0 # cameraDistanceFromRobotCenter
+	DIST_Z =  0.158# cameraHeightFromFloor
+	TILT = -1.4 * pi / 180
 	
 	from .RealSpecific import RealSpecific as Specific
 

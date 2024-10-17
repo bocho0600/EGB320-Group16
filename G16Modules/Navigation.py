@@ -40,11 +40,11 @@ class NavigationModule:
 		MAX_ROBOT_ROT = pi/5 # rad/s
 		RADIUS = 0.13 # how far to stay away from wall
 	else:
-		MAX_ROBOT_VEL = 0.16 # m/s
+		MAX_ROBOT_VEL = 0.19 # m/s
 		ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
 		Kp1 = 3.5 # FOR DRIVING
 		Kp2 = 1.8 # FOR FACING
-		MAX_ROBOT_ROT = pi/3 # rad/s
+		MAX_ROBOT_ROT = pi/4 # rad/s
 		RADIUS = 0.20 # how far to stay away from wall
 
 	@classmethod
@@ -461,10 +461,10 @@ class NavigationModule:
 
 			# This is the main section we need to tweak to not crash into the shelf
 			# Consider using the corner angle to inform the stopping distance (we have that info in visout!)
-			if distance is not None and ((cls.target_aisle == 1 and distance < 0.35) or\
-				(cls.target_aisle == 2 and distance < 1.05) or\
+			if distance is not None and ((cls.target_aisle == 1 and distance < 0.40) or\
+				(cls.target_aisle == 2 and distance < 1.25) or\
 				(cls.target_aisle == 3 and ((cls.last_target_aisle >= 2 and distance < 0.55) or
-											(cls.last_target_aisle < 2 and distance < 0.28)))):
+											(cls.last_target_aisle < 2 and distance < 0.40)))):
 				if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
 					# shelf is on the right
 					cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen=2*pi)
@@ -479,6 +479,7 @@ class NavigationModule:
 		if cls.loa_stage == 3:
 			if visout.marker_bearing is not None:
 				cls.set_velocity(0,0)
+				time.sleep(0.5)
 				return STATE.AISLE_DOWN, debug_img	
 
 
@@ -742,7 +743,7 @@ class NavigationModule:
 
 				bearing = (cx - SCREEN_WIDTH/2) * FOV_HORIZONTAL/SCREEN_WIDTH
 				
-				if PathProcess.completed or time.time() - cls.face_start >= 1.0:
+				if PathProcess.completed or time.time() - cls.face_start >= 3.0:
 					cls.set_velocity(0,0)
 					cls.collect_item_stage += 1
 				else:
@@ -751,14 +752,15 @@ class NavigationModule:
 			else:
 				print("At bay but can't see item")
 				if cls.target_side == 'Right':
-					cls.set_velocity(0,-cls.MAX_ROBOT_ROT*0.8)
+					cls.set_velocity(0,-cls.MAX_ROBOT_ROT)
 				else:
-					cls.set_velocity(0,cls.MAX_ROBOT_ROT*0.8)
+					cls.set_velocity(0,cls.MAX_ROBOT_ROT)
 
 		elif cls.collect_item_stage == 2:
 			# Lower item collection
 			# Not implemented
-			cls.set_velocity(2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.18)
+			Specific.lifter_set(cls.target_height)
+			cls.set_velocity(2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 3:
 			# Move forward
@@ -768,12 +770,12 @@ class NavigationModule:
 		elif cls.collect_item_stage == 4:
 			# Close gripper
 			# Not implemented
-			Specific.item_collection("CLOSE")
-			cls.set_velocity(-2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.18)
+			cls.set_velocity(-2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 5:
 			# Move backwards
 			if PathProcess.completed:
+				Specific.lifter_set(2)
 				if cls.target_side == 'Right':
 					cls.set_velocity(0,cls.MAX_ROBOT_ROT,rotlen=pi/2)
 				else:
@@ -868,7 +870,7 @@ class NavigationModule:
 
 			if visout.marker_bearing is not None:
 				
-				if PathProcess.completed or time.time() - cls.face_start >= 1.0:
+				if PathProcess.completed or time.time() - cls.face_start >= 3.0:
 					cls.set_velocity(0,0)
 					return STATE.DROP_ITEM, debug_img
 				else:
@@ -885,7 +887,7 @@ class NavigationModule:
 	def DROP_ITEM_start(cls):
 		Specific.leds(0b010)
 		cls.drop_item_stage = 0
-		cls.set_velocity(cls.MAX_ROBOT_VEL,0,fwdlen=0.53)
+		cls.set_velocity(1.15*cls.MAX_ROBOT_VEL,0,fwdlen=0.60)
 	
 	@classmethod
 	def DROP_ITEM_update(cls, delta, debug_img, visout):
@@ -899,8 +901,7 @@ class NavigationModule:
 		elif cls.drop_item_stage == 1:
 			# Drop item
 			# Not implemented
-			Specific.item_collection("OPEN")
-			cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.43)
+			cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.40)
 			cls.drop_item_stage = 3
 		# elif cls.drop_item_stage == 2:
 		# 	# Move backward
