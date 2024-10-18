@@ -412,6 +412,16 @@ class NavigationModule:
 		if cls.loa_stage == 2:
 			# Until we are at entry point i.e. a location where we can see the CORRECT aisle marker and hopefully not crash into the side of the shelf
 
+
+			def get_left_side(cont):
+					x,y,w,h = cv2.boundingRect(cont.astype(np.int32))
+					return x
+			def get_right_side(cont):
+					x,y,w,h = cv2.boundingRect(cont.astype(np.int32))
+					return x+w
+
+
+
 			if not cls.checkContour(visout.contoursShelf):
 				cls.loa_stage = -1
 				return STATE.LOST_OUTSIDE_AISLE, debug_img
@@ -434,9 +444,6 @@ class NavigationModule:
 					distance = None
 
 
-				def get_left_side(cont):
-					x,y,w,h = cv2.boundingRect(cont.astype(np.int32))
-					return x
 				
 				bearing = (get_left_side(min(visout.contoursShelf, key=get_left_side))-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH
 				fwd, rot = cls.move_into_path(bearing, debug_img, obstacles)
@@ -454,9 +461,13 @@ class NavigationModule:
 				else:
 					distance = None
 				
-				def get_right_side(cont):
-					x,y,w,h = cv2.boundingRect(cont.astype(np.int32))
-					return x+w
+				if cls.checkContour(visout.contoursLoadingArea):
+					loadingArea = max(visout.contoursLoadingArea, key=cv2.contourArea)
+					cx = get_right_side(loadingArea)
+					la_bearing = (cx - SCREEN_WIDTH/2) * FOV_HORIZONTAL / SCREEN_WIDTH 
+					la_range = 0.4
+					obstacles.append([la_range, la_bearing])
+					
 
 
 				bearing = (get_right_side(max(visout.contoursShelf, key=get_right_side))-SCREEN_WIDTH/2)*FOV_HORIZONTAL/SCREEN_WIDTH
@@ -946,9 +957,12 @@ class NavigationModule:
 
 		if cls.drop_item_stage == 0:
 			# Move forward
-			if PathProcess.completed or visout.marker_bearing is None:
+			if visout.marker_bearing is None:
 				cls.set_velocity(0,0)
 				cls.drop_item_stage += 1
+			else:
+				fwd, rot = cls.move_into_path(visout.marker_bearing, debug_img, visout.obstacles)
+				cls.set_velocity(fwd*1.15, rot*1.15)
 		elif cls.drop_item_stage == 1:
 			# Drop item
 			Specific.gripper_open(0.2)
