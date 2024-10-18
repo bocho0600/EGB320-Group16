@@ -967,7 +967,8 @@ class NavigationModule:
 				cls.set_velocity(fwd*1.15, rot*1.15)
 		elif cls.drop_item_stage == 1:
 			# Drop item
-			Specific.gripper_open(0.2)
+			Specific.gripper_open(0.25)
+			time.sleep(0.5)
 			Specific.gripper_close()
 			Specific.gripper_open()
 			if cls.target_aisle == 1: # This is the aisle we came from
