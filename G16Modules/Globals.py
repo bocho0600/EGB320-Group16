@@ -49,7 +49,7 @@ else:
 	# White chassis
 	DIST_X = 0.0 # cameraDistanceFromRobotCenter
 	DIST_Z =  0.158# cameraHeightFromFloor
-	TILT = -1.4 * pi / 180
+	TILT = 0 * pi / 180
 	
 	from .RealSpecific import RealSpecific as Specific
 

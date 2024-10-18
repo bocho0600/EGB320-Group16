@@ -5,7 +5,8 @@ from G16Modules.Globals import *
 from G16Modules.Vision import VisionModule
 from G16Modules.Navigation import NavigationModule, STATE
 import VisionSub.csvread as csvread
-
+from G16Modules.PathProcess import PathProcess
+import math
 
 def main(): # Main function
 
@@ -32,6 +33,8 @@ def main(): # Main function
 			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
 		elif pipeline == 'nav':
 			NavigationModule.init(STATE.LOST, instructions, starting_instruction)
+		elif pipeline == "pcontrol":
+			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
 		t1 = time.time()
 
 		while True:
@@ -104,6 +107,46 @@ def main(): # Main function
 				else:
 					robotview = NavigationModule.update(None, visout)
 
+					t2 = time.time()
+					print(f"FPS: {1.0/(t2-t1):.1f}")
+					t1 = t2
+			elif pipeline == "pcontrol":
+				robotview, visout = VisionModule.Pipeline(draw)
+				if robotview is None:
+					continue
+
+				def item_center_x(cont):
+					x, y, w, h = cv2.boundingRect(cont)
+					return x + w/2
+
+				largest_item = min(visout.contoursItem, key=lambda cont:abs(item_center_x(cont) - SCREEN_WIDTH/2))
+
+				x, y, w, h = cv2.boundingRect(largest_item)
+				cx = x + w/2
+
+				if draw:
+					cv2.drawMarker(robotview, (int(cx), int(y+h/2)), (255,151,0), cv2.MARKER_STAR, 12)
+
+				bearing = (cx - SCREEN_WIDTH/2) * FOV_HORIZONTAL/SCREEN_WIDTH
+
+				if bearing is not None:
+				
+					if PathProcess.completed:
+						NavigationModule.set_velocity(0,0)
+						
+					else:
+						speed = NavigationModule.Kp2 * bearing
+						if abs(speed) < 0.8:
+							speed = math.copysign(0.8, speed)
+						NavigationModule.set_velocity(0, speed, rotlen=abs(bearing))
+				else:
+					NavigationModule.set_velocity(0, 0)
+
+
+
+				if draw:
+					VisionModule.ExportImage("RobotView", robotview, FPS = True)
+				else:
 					t2 = time.time()
 					print(f"FPS: {1.0/(t2-t1):.1f}")
 					t1 = t2

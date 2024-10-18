@@ -19,18 +19,13 @@ class MobilityModule:
 			'''
 			# Convert velocities to motor speed ranges
 			max_speed = 255  # 255 is the maximum speed (because DC write (pwm) is 255)
-			min_speed = 24  # :D
-			min_t = 12
 
 			left_motor_speed = linear_velocity + angular_velocity
 			right_motor_speed = linear_velocity - angular_velocity
 
 			# Ensure the speeds are within the allowable range
-			if left_motor_speed != 0 and abs(left_motor_speed) < min_speed and abs(left_motor_speed) >= min_t:
-				left_motor_speed = math.copysign(min_speed, left_motor_speed)
+
 			left_motor_speed = max(min(left_motor_speed, max_speed), -max_speed)
-			if right_motor_speed != 0 and abs(right_motor_speed) < min_speed and abs(right_motor_speed) >= min_t:
-				right_motor_speed = math.copysign(min_speed, right_motor_speed)
 			right_motor_speed = max(min(right_motor_speed, max_speed), -max_speed)
 			
 			

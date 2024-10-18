@@ -8,11 +8,8 @@ from .RP2040 import I2C
 from .Mobility import MobilityModule
 
 
-time.sleep(1)
 I2C.init()
 from .ItemCollection import ItemCollectionModule
-time.sleep(1)
-ItemCollectionModule.gripper_open()
 
 
 class RealSpecific:
@@ -69,14 +66,15 @@ class RealSpecific:
 			cls.frameGrabber = CamFrameGrabber(cls.camera, SCREEN_WIDTH, SCREEN_HEIGHT)
 			cls.frameGrabber.start()
 		
-		ItemCollectionModule.lifter_set(2)
+		
 		time.sleep(0.3)
 		cls.leds(0b101)
 		time.sleep(0.3)
 		cls.leds(0b010)
 		time.sleep(0.3)
 		cls.leds(0b101)
-		time.sleep(0.3)
+
+		ItemCollectionModule.init()
 		cls.leds(0b000)
 		time.sleep(0.3)
 
@@ -113,6 +111,18 @@ class RealSpecific:
 	@classmethod
 	def lifter_set(cls, h):
 		ItemCollectionModule.lifter_set(h)
+
+	@classmethod
+	def gripper_stop(cls):
+		ItemCollectionModule.gripper_stop()
+	
+	@classmethod
+	def gripper_close(cls, seconds=1.5):
+		ItemCollectionModule.gripper_close(seconds)
+	
+	@classmethod
+	def gripper_open(cls, seconds=1.5):
+		ItemCollectionModule.gripper_open(seconds)
 
 
 

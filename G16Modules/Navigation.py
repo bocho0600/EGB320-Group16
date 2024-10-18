@@ -85,6 +85,7 @@ class NavigationModule:
 		cls.bay_width = cls.shelf_length / 4
 		cls.target_bay_distance = cls.shelf_length - cls.bay_width/2 - cls.target_bay*cls.bay_width
 		print(f"We want to be {cls.target_bay_distance} cm from aisle marker {cls.target_aisle}")
+		print(f"Height {cls.target_height}")
 
 	@classmethod
 	def init(cls, initial_state, instructions, starting_instruction=0):
@@ -720,6 +721,7 @@ class NavigationModule:
 	@classmethod
 	def COLLECT_ITEM_start(cls):
 		Specific.leds(0b110)
+		Specific.lifter_set(cls.target_height)
 		if cls.target_bay != 3:
 			cls.collect_item_stage = 0
 			if cls.target_side == 'Right':
@@ -766,7 +768,10 @@ class NavigationModule:
 					cls.set_velocity(0,0)
 					cls.collect_item_stage += 1
 				else:
-					cls.set_velocity(0, cls.Kp2 * bearing, rotlen=abs(bearing)/2)
+					speed = cls.Kp2 * bearing
+					if abs(speed) < 0.8:
+						speed = math.copysign(0.8, speed)
+					cls.set_velocity(0, cls.Kp2 * bearing, rotlen=abs(bearing))
 
 			else:
 				print("At bay but can't see item")
@@ -778,7 +783,7 @@ class NavigationModule:
 		elif cls.collect_item_stage == 2:
 			# Lower item collection
 			# Not implemented
-			Specific.lifter_set(cls.target_height)
+			
 			cls.set_velocity(2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 3:
@@ -788,14 +793,15 @@ class NavigationModule:
 				cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 4:
 			# Close gripper
-			# Not implemented
+			Specific.gripper_close()
+
 			if cls.target_bay != 3:
 				cls.set_velocity(-2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
 			else:
 				if cls.target_side == 'Right':
-					PathProcess.new_path([(-cls.MAX_ROBOT_VEL/2, -cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
+					PathProcess.new_path([(-cls.MAX_ROBOT_VEL/2, 0, 0.05, None), (-cls.MAX_ROBOT_VEL/2, -cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
 				else:
-					PathProcess.new_path([(-cls.MAX_ROBOT_VEL/2, cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
+					PathProcess.new_path([(-cls.MAX_ROBOT_VEL/2, 0, 0.05, None), (-cls.MAX_ROBOT_VEL/2, cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 5:
 			# Move backwards
@@ -916,7 +922,10 @@ class NavigationModule:
 					cls.set_velocity(0,0)
 					return STATE.DROP_ITEM, debug_img
 				else:
-					cls.set_velocity(0, cls.Kp2 * visout.marker_bearing, rotlen=abs(visout.marker_bearing)/2)
+					speed = cls.Kp2 * visout.marker_bearing
+					if abs(speed) < 0.8:
+						speed = math.copysign(0.8, speed)
+					cls.set_velocity(0, speed, rotlen=abs(visout.marker_bearing))
 			else:
 				print("At packing but can't see marker")
 				cls.set_velocity(0, cls.MAX_ROBOT_ROT)
@@ -929,7 +938,7 @@ class NavigationModule:
 	def DROP_ITEM_start(cls):
 		Specific.leds(0b010)
 		cls.drop_item_stage = 0
-		cls.set_velocity(1.1*cls.MAX_ROBOT_VEL,0,fwdlen=0.60)
+		cls.set_velocity(1.1*cls.MAX_ROBOT_VEL,0)#,fwdlen=0.60) go until we can't see marker
 	
 	@classmethod
 	def DROP_ITEM_update(cls, delta, debug_img, visout):
@@ -937,13 +946,21 @@ class NavigationModule:
 
 		if cls.drop_item_stage == 0:
 			# Move forward
-			if PathProcess.completed:
+			if PathProcess.completed or visout.marker_bearing is None:
 				cls.set_velocity(0,0)
 				cls.drop_item_stage += 1
 		elif cls.drop_item_stage == 1:
 			# Drop item
-			# Not implemented
-			cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.40)
+			Specific.gripper_open(0.2)
+			Specific.gripper_close()
+			Specific.gripper_open()
+			if cls.target_aisle == 1: # This is the aisle we came from
+				cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.30)
+			elif cls.target_aisle == 2:
+				cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.45)
+			elif cls.target_aisle == 3:
+				cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.55)
+			
 			cls.drop_item_stage = 3
 		# elif cls.drop_item_stage == 2:
 		# 	# Move backward
