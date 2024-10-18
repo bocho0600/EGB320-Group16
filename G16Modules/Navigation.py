@@ -39,6 +39,7 @@ class NavigationModule:
 		Kp2 = 2.4 
 		MAX_ROBOT_ROT = pi/5 # rad/s
 		RADIUS = 0.13 # how far to stay away from wall
+		MIN_ROTATION = 0.8
 	else:
 		MAX_ROBOT_VEL = 0.19 # m/s
 		ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
@@ -46,6 +47,7 @@ class NavigationModule:
 		Kp2 = 1.8 # FOR FACING
 		MAX_ROBOT_ROT = pi/3 # rad/s
 		RADIUS = 0.20 # how far to stay away from wall
+		MIN_ROTATION = 0.8
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):
@@ -780,8 +782,8 @@ class NavigationModule:
 					cls.collect_item_stage += 1
 				else:
 					speed = cls.Kp2 * bearing
-					if abs(speed) < 0.8:
-						speed = math.copysign(0.8, speed)
+					if abs(speed) < cls.MIN_ROTATION:
+						speed = math.copysign(cls.MIN_ROTATION, speed)
 					cls.set_velocity(0, cls.Kp2 * bearing, rotlen=abs(bearing))
 
 			else:
@@ -934,8 +936,8 @@ class NavigationModule:
 					return STATE.DROP_ITEM, debug_img
 				else:
 					speed = cls.Kp2 * visout.marker_bearing
-					if abs(speed) < 0.8:
-						speed = math.copysign(0.8, speed)
+					if abs(speed) < cls.MIN_ROTATION:
+						speed = math.copysign(cls.MIN_ROTATION, speed)
 					cls.set_velocity(0, speed, rotlen=abs(visout.marker_bearing))
 			else:
 				print("At packing but can't see marker")

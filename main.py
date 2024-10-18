@@ -136,8 +136,8 @@ def main(): # Main function
 						
 					else:
 						speed = NavigationModule.Kp2 * bearing
-						if abs(speed) < 0.8:
-							speed = math.copysign(0.8, speed)
+						if abs(speed) < NavigationModule.MIN_ROTATION:
+							speed = math.copysign(NavigationModule.MIN_ROTATION, speed)
 						NavigationModule.set_velocity(0, speed, rotlen=abs(bearing))
 				else:
 					NavigationModule.set_velocity(0, 0)
