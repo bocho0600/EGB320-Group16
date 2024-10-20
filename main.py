@@ -20,10 +20,10 @@ def main(): # Main function
 		Specific.start()
 		
 		VisionModule.calculate_projection_transform()
-		starting_instruction = 1
+		starting_instruction = 2
 
 		
-		pipeline = 'nav'
+		pipeline = 'debug'
 		draw = True
 
 		
@@ -32,7 +32,7 @@ def main(): # Main function
 		elif pipeline == 'debug':
 			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
 		elif pipeline == 'nav':
-			NavigationModule.init(STATE.AISLE_DOWN, instructions, starting_instruction)
+			NavigationModule.init(STATE.LOST, instructions, starting_instruction)
 		elif pipeline == "pcontrol":
 			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
 		t1 = time.time()
@@ -80,13 +80,14 @@ def main(): # Main function
 				# Run vision and most CPU-intensive nav code but don't move
 				NavigationModule.current_state = STATE.VEGETABLE
 				NavigationModule.set_velocity(0,0)
-				robotview = VisionModule.DebugPipeline(draw)
+				robotview, img2= VisionModule.DebugPipeline(draw)
 				if robotview is None:
 					continue
 				
 
 				if draw:
 					VisionModule.ExportImage("RobotView", robotview, FPS = True)
+					VisionModule.ExportImage("Wallmask", img2, FPS = False)
 				else:
 					t2 = time.time()
 					print(f"FPS: {1.0/(t2-t1):.1f}")
@@ -96,6 +97,7 @@ def main(): # Main function
 				robotview, visout = VisionModule.Pipeline(draw)
 				if robotview is None:
 					continue
+				img2 = visout.WallMask
 				
 				# print(marker_distance, marker_bearing)
 				

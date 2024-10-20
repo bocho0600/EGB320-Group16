@@ -39,6 +39,7 @@ class NavigationModule:
 		MAX_ROBOT_ROT = pi/5 # rad/s
 		RADIUS = 0.13 # how far to stay away from wall
 		MIN_ROTATION = 1.0
+		ITEM_BIAS = 0.0
 	else:
 		MAX_ROBOT_VEL = 0.19 # m/s
 		ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
@@ -47,6 +48,7 @@ class NavigationModule:
 		MAX_ROBOT_ROT = pi/4 # rad/s
 		RADIUS = 0.20 # how far to stay away from wall
 		MIN_ROTATION = 1.0
+		ITEM_BIAS = 2. * pi/180
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):
@@ -448,15 +450,17 @@ class NavigationModule:
 			# This is the main section we need to tweak to not crash into the shelf
 			# Consider using the corner angle to inform the stopping distance (we have that info in visout!)
 			if distance is not None and ((cls.target_aisle == 1 and distance <= 0.46) or\
-				(cls.target_aisle == 2 and distance <= 1.20) or\
+				(cls.target_aisle == 2 and distance <= 1.17) or\
 				(cls.target_aisle == 3 and ((cls.last_target_aisle >= 2 and distance <= 0.55) or
 											(cls.last_target_aisle < 2 and distance <= 0.46)))):
 				if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
 					# shelf is on the right
-					cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen=2*pi)
+					cls.aisle_dir = 0
+					cls.set_velocity(0, cls.MAX_ROBOT_ROT)
 				else:
 					# shelf is on the left
-					cls.set_velocity(0, -cls.MAX_ROBOT_ROT, rotlen=2*pi)
+					cls.aisle_dir = 1
+					cls.set_velocity(0, -cls.MAX_ROBOT_ROT)
 				print(f"At entry point ({distance:.2f})")
 				cls.loa_stage = 3
 			else:
@@ -466,7 +470,15 @@ class NavigationModule:
 			if not cls.checkContour(visout.contoursLoadingArea) and visout.marker_bearing is not None:
 				cls.set_velocity(0,0)
 				time.sleep(0.5)
-				return STATE.AISLE_DOWN, debug_img	
+				return STATE.AISLE_DOWN, debug_img
+			elif len(visout.detected_shelves) >= 2:
+				if cls.aisle_dir == 0:
+					# shelf is on the right
+					cls.set_velocity(0, cls.MAX_ROBOT_ROT * 0.7)
+				else:
+					# shelf is on the left
+					cls.set_velocity(0, -cls.MAX_ROBOT_ROT * 0.7)
+
 
 
 		return STATE.LOST_OUTSIDE_AISLE, debug_img
@@ -538,7 +550,7 @@ class NavigationModule:
 
 	@classmethod
 	def BLIND_MOVE_start(cls):
-		Specific.leds(0b110)
+		Specific.leds(0b010)
 	
 	@classmethod
 	def BLIND_MOVE_update(cls, delta, debug_img, visout):
@@ -565,7 +577,7 @@ class NavigationModule:
 		# 	cls.am_proximity_thresh = None
 		# if not hasattr(cls, 'am_traversed_thresh'):
 		# 	cls.am_traversed_thresh = None
-		Specific.leds(0b011)
+		Specific.leds(0b010)
 		cls.avoid_moved = 0
 
 		pass
@@ -667,7 +679,7 @@ class NavigationModule:
 					cls.set_velocity(0,0)
 					cls.collect_item_stage += 1
 				else:
-					error = bearing - 8*pi/180
+					error = bearing - cls.ITEM_BIAS
 					speed = cls.Kp2 * error
 					if abs(speed) < cls.MIN_ROTATION:
 						speed = math.copysign(cls.MIN_ROTATION, speed)
@@ -707,16 +719,14 @@ class NavigationModule:
 			else:
 				bearing = 0
 			
-			bearing = bearing - 8*pi/180
+			bearing = bearing - cls.ITEM_BIAS
 
 			if time.time() - cls.fwd_start >= 3.0:
 				cls.set_velocity(0,0)
 				cls.collect_item_stage += 1
 			else:
-				speed = cls.Kp2 * bearing
-				if abs(speed) < cls.MIN_ROTATION:
-					speed = math.copysign(cls.MIN_ROTATION, speed)
-				cls.set_velocity(0, cls.Kp2 * bearing, rotlen=abs(bearing))
+				fwd, rot = cls.move_into_path(bearing, debug_img, visout.obstacles)
+				cls.set_velocity(0.8*fwd, rot)
 				
 		elif cls.collect_item_stage == 4:
 			# Close gripper
@@ -781,7 +791,7 @@ class NavigationModule:
 		if cls.aisle_out_stage == -1:
 			if visout.detected_shelves is None:
 				cls.next_state = STATE.APPROACH_PACKING
-				cls.avoid_dist = 0.4
+				cls.avoid_dist = 0.20
 				return STATE.AVOID_MOVE, debug_img
 			cls.aisle_out_stage = 0
 
@@ -849,7 +859,7 @@ class NavigationModule:
 					cls.set_velocity(0,0)
 					return STATE.DROP_ITEM, debug_img
 				else:
-					error = visout.marker_bearing - 8*pi/180
+					error = visout.marker_bearing - cls.ITEM_BIAS
 					speed = cls.Kp2 * error
 					if abs(speed) < cls.MIN_ROTATION:
 						speed = math.copysign(cls.MIN_ROTATION, speed)
@@ -873,17 +883,22 @@ class NavigationModule:
 	def DROP_ITEM_update(cls, delta, debug_img, visout):
 		# Forward, drop, backwards, turn, forwards, -> LOST_OUTSIDE_AISLE
 
-		desired_marker_dist = 0.225 # m from packing marker (not real distance but judged distance)
+		desired_marker_dist = 0.25 # m from packing marker (not real distance but judged distance)
 
 		if cls.drop_item_stage == 0:
 			# Move forward
-			if PathProcess.completed or visout.marker_bearing is None or visout.marker_distance/100 <= desired_marker_dist:
+			if PathProcess.completed or (visout.marker_bearing is not None and visout.marker_distance/100 <= desired_marker_dist):
 				cls.set_velocity(0,0)
 				cls.drop_item_stage = 2
 			else:
-				fwd, rot = cls.move_into_path(visout.marker_bearing, debug_img, visout.obstacles)
-				dist = visout.marker_distance/100 - desired_marker_dist
-				cls.set_velocity(fwd*1.2, rot*1.2, fwdlen=dist)
+				if visout.marker_bearing is not None:
+					fwd, rot = cls.move_into_path(visout.marker_bearing, debug_img, visout.obstacles)
+					dist = visout.marker_distance/100 - desired_marker_dist
+					cls.set_velocity(fwd*1.2, rot*1.2, fwdlen=dist)
+				else:
+					pass
+				
+				
 		# elif cls.drop_item_stage == 1:
 		# 	if PathProcess.completed:
 		# 		cls.set_velocity(0,0)

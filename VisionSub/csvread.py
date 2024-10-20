@@ -52,19 +52,19 @@ class CSVReader:
         # Move aisle 1 to the bottom
         # Select the first from each aisle
         # Order be descending row number
-        def item_difficulty(row):
-            item = row[4]
-            if item == "Cube" or item == "Bottle" or item == "Mug":
-                return 1 # easy
-            elif item == "Weetbots":
-                return 3 # hard
-            else:
-                return 2
+        # def item_difficulty(row):
+        #     item = row[4]
+        #     if item == "Cube" or item == "Bottle" or item == "Mug":
+        #         return 1 # easy
+        #     elif item == "Weetbots":
+        #         return 3 # hard
+        #     else:
+        #         return 2
 
-        robot_instruction2 = sorted(robot_instruction2, key = item_difficulty)
-        robot_instruction2 = [r for r in robot_instruction2 if r[0] != '1'] + [r for r in robot_instruction2 if r[0] == '1']
-        robot_instruction2 = [next(r for r in robot_instruction2 if r[3] == '0'), next(r for r in robot_instruction2 if r[3] == '1'), next(r for r in robot_instruction2 if r[3] == '2')]
-        robot_instruction2 = sorted(robot_instruction2, key = lambda r:r[0], reverse=True)
+        # robot_instruction2 = sorted(robot_instruction2, key = item_difficulty)
+        # robot_instruction2 = [r for r in robot_instruction2 if r[0] != '1'] + [r for r in robot_instruction2 if r[0] == '1']
+        # robot_instruction2 = [next(r for r in robot_instruction2 if r[3] == '0'), next(r for r in robot_instruction2 if r[3] == '1'), next(r for r in robot_instruction2 if r[3] == '2')]
+        # robot_instruction2 = sorted(robot_instruction2, key = lambda r:r[0], reverse=True)
 
         self.robot_instruction = self.robot_instruction + robot_instruction2
 

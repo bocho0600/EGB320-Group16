@@ -230,8 +230,32 @@ class VisionModule:
 	#region Pipelines
 	@classmethod
 	def DebugPipeline(cls, draw=True):
-		# Pipeline for testing vision code.
-		pass
+		img, imgHSV, robotview = Specific.get_image()
+		if img is None:
+			print("Failed getting image")
+			return None, None
+
+		# Detect shelves in the HSV image
+		contoursShelf, ShelfMask = cls.findShelf(imgHSV, 100, cv2.CHAIN_APPROX_NONE)
+		contoursObstacle, ObstacleMask = cls.findObstacle(imgHSV, 200, cv2.CHAIN_APPROX_NONE)
+		contoursLoadingArea, LoadingAreaMask = cls.findLoadingArea(imgHSV)
+		contoursItem, ItemMask = cls.findItems(imgHSV)
+
+		# Detect wall and marker within
+		WallRGB,  WallImgGray, WallMask, contoursWall1 = cls.findWall(imgHSV,img)
+		ContoursMarkers, mask1 = cls.findMarkers(WallImgGray, WallMask)
+		avg_center, marker_bearing, marker_distance, aisle = cls.GetInfoMarkers(robotview, ContoursMarkers, draw=draw)
+
+
+		detected_shelves = cls.ProcessContoursShelf(contoursShelf, robotview, (0,255,255),"Shelf", False)
+		detected_obstacles = cls.ProcessContoursObject(contoursObstacle, robotview, (151,255,0), "Obstacle", False)
+		detected_wall = cls.ProcessContoursObject(contoursWall1, robotview, (127,127,127), "Wall", False)
+
+		ObsTest, ObsCenter = cls.GetInfoObject(robotview, detected_obstacles, img, draw)
+
+		ShelfCorners = cls.ProcessShelfCorners(contoursShelf, robotview, draw=draw)
+
+		return robotview, WallMask
 
 	@classmethod
 	def Pipeline(cls, draw=True):
@@ -272,7 +296,8 @@ class VisionModule:
 			detected_wall=detected_wall,
 			contoursLoadingArea=contoursLoadingArea,
 			shelfCorners=ShelfCorners,
-			obstacles=ObsTest
+			obstacles=ObsTest,
+			WallMask=WallMask
 			)
 
 	#endregion
@@ -421,7 +446,7 @@ class VisionModule:
 			cv2.drawContours(filledWallMask, [largest_contour], -1, (255), thickness=cv2.FILLED)
 			
 			# Apply Gaussian blur to the filled mask
-			filledWallMask = cv2.GaussianBlur(filledWallMask, (9, 9), 2)
+			filledWallMask = cv2.GaussianBlur(WallMask, (9, 9), 2)
 			
 			# Use the filled mask to extract the wall image
 			WallImg = cv2.bitwise_and(imgRGB, imgRGB, mask=filledWallMask)
@@ -442,9 +467,9 @@ class VisionModule:
 	@classmethod # Returns markers contours inside wall. Need to call findWall first
 	def findMarkers(cls, WallImgGray, WallMask):
 		# mask = cv2.inRange(WallRGB, cls.color_ranges['black'][0], cls.color_ranges['black'][1])
-		_, mask = cv2.threshold(WallImgGray, 110, 255, cv2.THRESH_BINARY_INV)
+		_, mask = cv2.threshold(WallImgGray, 130, 255, cv2.THRESH_BINARY_INV)
 		markers = cv2.bitwise_and(WallMask, mask)
-		_, mask1 = cv2.threshold(markers, 110, 255, cv2.THRESH_BINARY)
+		_, mask1 = cv2.threshold(markers, 130, 255, cv2.THRESH_BINARY)
 		ContoursMarkers, _ = cv2.findContours(markers, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 		return ContoursMarkers, mask1
 	
