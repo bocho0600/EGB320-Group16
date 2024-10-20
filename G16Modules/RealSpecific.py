@@ -124,6 +124,10 @@ class RealSpecific:
 	def gripper_open(cls, seconds=1.5):
 		ItemCollectionModule.gripper_open(seconds)
 
+	@classmethod
+	def play_song(cls):
+		I2C.PlaySong('1')
+
 
 
 # Define the CamFrameGrabber class

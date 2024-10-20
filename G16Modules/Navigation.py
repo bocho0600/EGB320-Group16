@@ -308,7 +308,7 @@ class NavigationModule:
 
 	@classmethod
 	def LOST_start(cls):
-		Specific.leds(0b001)
+		Specific.leds(0b100)
 		print("Lost!")
 		cls.is_inside_aisle = True
 		PathProcess.new_path([(0, cls.MAX_ROBOT_ROT, None, 2*pi)])
@@ -335,7 +335,7 @@ class NavigationModule:
 
 	@classmethod
 	def LOST_OUTSIDE_AISLE_start(cls):
-		Specific.leds(0b001)
+		Specific.leds(0b100)
 		# if we're going to aisle, find (estimate) entry point
 		
 		
@@ -447,10 +447,10 @@ class NavigationModule:
 
 			# This is the main section we need to tweak to not crash into the shelf
 			# Consider using the corner angle to inform the stopping distance (we have that info in visout!)
-			if distance is not None and ((cls.target_aisle == 1 and distance < 0.46) or\
-				(cls.target_aisle == 2 and distance < 1.32) or\
-				(cls.target_aisle == 3 and ((cls.last_target_aisle >= 2 and distance < 0.55) or
-											(cls.last_target_aisle < 2 and distance < 0.46)))):
+			if distance is not None and ((cls.target_aisle == 1 and distance <= 0.46) or\
+				(cls.target_aisle == 2 and distance <= 1.20) or\
+				(cls.target_aisle == 3 and ((cls.last_target_aisle >= 2 and distance <= 0.55) or
+											(cls.last_target_aisle < 2 and distance <= 0.46)))):
 				if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
 					# shelf is on the right
 					cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen=2*pi)
@@ -473,7 +473,7 @@ class NavigationModule:
 
 	@classmethod
 	def LOST_INSIDE_AISLE_start(cls):
-		Specific.leds(0b001)
+		Specific.leds(0b100)
 	
 	@classmethod
 	def LOST_INSIDE_AISLE_update(cls, delta, debug_img, visout):
@@ -538,7 +538,7 @@ class NavigationModule:
 
 	@classmethod
 	def BLIND_MOVE_start(cls):
-		Specific.leds(0b010)
+		Specific.leds(0b110)
 	
 	@classmethod
 	def BLIND_MOVE_update(cls, delta, debug_img, visout):
@@ -565,7 +565,7 @@ class NavigationModule:
 		# 	cls.am_proximity_thresh = None
 		# if not hasattr(cls, 'am_traversed_thresh'):
 		# 	cls.am_traversed_thresh = None
-		Specific.leds(0b001)
+		Specific.leds(0b011)
 		cls.avoid_moved = 0
 
 		pass
@@ -620,7 +620,7 @@ class NavigationModule:
 
 	@classmethod
 	def COLLECT_ITEM_start(cls):
-		Specific.leds(0b110)
+		Specific.leds(0b010)
 		if cls.target_bay != 3:
 			cls.collect_item_stage = 0
 			if cls.target_side == 'Right':
@@ -767,7 +767,7 @@ class NavigationModule:
 
 	@classmethod
 	def AISLE_OUT_start(cls):
-		Specific.leds(0b101)
+		Specific.leds(0b001)
 		cls.last_shelf_side = None
 		cls.aisle_out_stage = -1
 	
@@ -806,7 +806,7 @@ class NavigationModule:
 
 	@classmethod
 	def APPROACH_PACKING_start(cls):
-		Specific.leds(0b010)
+		Specific.leds(0b001)
 		cls.loading_area_approach_stage = 0
 		cls.set_velocity(0, cls.MAX_ROBOT_ROT, rotlen = 2*pi)
 	
@@ -859,10 +859,11 @@ class NavigationModule:
 		return STATE.APPROACH_PACKING, debug_img
 
 
+	completed_items = 0
 
 	@classmethod
 	def DROP_ITEM_start(cls):
-		Specific.leds(0b010)
+		Specific.leds(0b001)
 		cls.drop_item_stage = 0
 		cls.set_velocity(1.1*cls.MAX_ROBOT_VEL,0)#,fwdlen=0.60) go until we can't see marker
 	
@@ -880,7 +881,7 @@ class NavigationModule:
 			else:
 				fwd, rot = cls.move_into_path(visout.marker_bearing, debug_img, visout.obstacles)
 				dist = visout.marker_distance/100 - desired_marker_dist
-				cls.set_velocity(fwd*1.1, rot*1.1, fwdlen=dist)
+				cls.set_velocity(fwd*1.2, rot*1.2, fwdlen=dist)
 		# elif cls.drop_item_stage == 1:
 		# 	if PathProcess.completed:
 		# 		cls.set_velocity(0,0)
@@ -895,7 +896,7 @@ class NavigationModule:
 			if cls.target_aisle == 1: # This is the aisle we came from
 				cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.43)
 			elif cls.target_aisle == 2:
-				cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.45)
+				cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.50)
 			elif cls.target_aisle == 3:
 				cls.set_velocity(-cls.MAX_ROBOT_VEL,0,fwdlen=0.55)
 			
@@ -913,14 +914,23 @@ class NavigationModule:
 		elif cls.drop_item_stage == 3:
 			# Turn around
 			if PathProcess.completed:
-				cls.current_phase = PHASE.COLLECT
-				cls.current_instruction = (cls.current_instruction % (len(cls.instructions)-1)) + 1
-				cls.process_instruction()
+				if cls.completed_items >= 3:
+					cls.set_velocity(0,0)
+					time.sleep(0.5)
+					Specific.play_song()
+					time.sleep(0.5)
 
-				# cls.avoid_dist = 0.4
-				# cls.next_state = STATE.LOST
-				# return STATE.AVOID_MOVE, debug_img
-				return STATE.LOST, debug_img
+					return STATE.VEGETABLE, debug_img
+				else:
+					cls.completed_items += 1
+					cls.current_phase = PHASE.COLLECT
+					cls.current_instruction = (cls.current_instruction % (len(cls.instructions)-1)) + 1
+					cls.process_instruction()
+
+					# cls.avoid_dist = 0.4
+					# cls.next_state = STATE.LOST
+					# return STATE.AVOID_MOVE, debug_img
+					return STATE.LOST, debug_img
 
 		return STATE.DROP_ITEM, debug_img
 
