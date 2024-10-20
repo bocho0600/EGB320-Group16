@@ -56,8 +56,10 @@ class CSVReader:
             item = row[4]
             if item == "Cube" or item == "Bottle" or item == "Mug":
                 return 1 # easy
+            elif item == "Weetbots":
+                return 3 # hard
             else:
-                return 2 # hard
+                return 2
 
         robot_instruction2 = sorted(robot_instruction2, key = item_difficulty)
         robot_instruction2 = [r for r in robot_instruction2 if r[0] != '1'] + [r for r in robot_instruction2 if r[0] == '1']

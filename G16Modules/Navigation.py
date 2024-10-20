@@ -38,7 +38,7 @@ class NavigationModule:
 		Kp2 = 2.4 
 		MAX_ROBOT_ROT = pi/5 # rad/s
 		RADIUS = 0.13 # how far to stay away from wall
-		MIN_ROTATION = 0.8
+		MIN_ROTATION = 1.0
 	else:
 		MAX_ROBOT_VEL = 0.19 # m/s
 		ROTATIONAL_BIAS = 0.83 #tweak this parameter to be more or less aggressive with turns vs straight
@@ -46,7 +46,7 @@ class NavigationModule:
 		Kp2 = 1.8 # FOR FACING
 		MAX_ROBOT_ROT = pi/4 # rad/s
 		RADIUS = 0.20 # how far to stay away from wall
-		MIN_ROTATION = 0.8
+		MIN_ROTATION = 1.0
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):
@@ -84,7 +84,7 @@ class NavigationModule:
 
 		cls.shelf_length = 112 #cm
 		cls.bay_width = cls.shelf_length / 4
-		cls.target_bay_distance = cls.shelf_length - cls.bay_width/2 - cls.target_bay*cls.bay_width
+		cls.target_bay_distance = cls.shelf_length - cls.bay_width/2 - cls.target_bay*cls.bay_width + 8
 		print(f"We want to be {cls.target_bay_distance} cm from aisle marker {cls.target_aisle}")
 		print(f"Height {cls.target_height}")
 
@@ -667,10 +667,11 @@ class NavigationModule:
 					cls.set_velocity(0,0)
 					cls.collect_item_stage += 1
 				else:
-					speed = cls.Kp2 * bearing
+					error = bearing - 8*pi/180
+					speed = cls.Kp2 * error
 					if abs(speed) < cls.MIN_ROTATION:
 						speed = math.copysign(cls.MIN_ROTATION, speed)
-					cls.set_velocity(0, cls.Kp2 * bearing, rotlen=abs(bearing))
+					cls.set_velocity(0, speed, rotlen=abs(bearing))
 
 			else:
 				print("At bay but can't see item")
@@ -683,7 +684,7 @@ class NavigationModule:
 			# Lower item collection
 			# Not implemented
 			Specific.lifter_set(cls.target_height)
-			cls.set_velocity(2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
+			cls.set_velocity(2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.27)
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 3:
 			# Move forward
@@ -695,7 +696,7 @@ class NavigationModule:
 			Specific.gripper_close(2.5)
 
 			if cls.target_bay != 3:
-				cls.set_velocity(-2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
+				cls.set_velocity(-2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.20)
 			else:
 				if cls.target_side == 'Right':
 					PathProcess.new_path([(-cls.MAX_ROBOT_VEL/2, 0, 0.05, None), (-cls.MAX_ROBOT_VEL/2, -cls.MAX_ROBOT_VEL/0.155, None, pi/2)])
@@ -821,7 +822,8 @@ class NavigationModule:
 					cls.set_velocity(0,0)
 					return STATE.DROP_ITEM, debug_img
 				else:
-					speed = cls.Kp2 * visout.marker_bearing
+					error = visout.marker_bearing - 8*pi/180
+					speed = cls.Kp2 * error
 					if abs(speed) < cls.MIN_ROTATION:
 						speed = math.copysign(cls.MIN_ROTATION, speed)
 					cls.set_velocity(0, speed, rotlen=abs(visout.marker_bearing))

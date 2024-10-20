@@ -22,7 +22,7 @@ class MobilityModule:
 
 			left_motor_speed = linear_velocity + angular_velocity
 			right_motor_speed = linear_velocity - angular_velocity
-
+			right_motor_speed *= 0.76 # Compensation
 			# Ensure the speeds are within the allowable range
 
 			left_motor_speed = max(min(left_motor_speed, max_speed), -max_speed)

@@ -9,7 +9,7 @@ class ItemCollectionModule:
     lifter_positions = [20, 97, 180]
 
     gripper_servo = 4
-    gripper_speeds = [74, 86, 96]
+    gripper_speeds = [72, 88, 96]
     # maximum open for 1.5 seconds
 
     @classmethod

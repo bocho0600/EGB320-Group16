@@ -32,7 +32,7 @@ def main(): # Main function
 		elif pipeline == 'debug':
 			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
 		elif pipeline == 'nav':
-			NavigationModule.init(STATE.LOST, instructions, starting_instruction)
+			NavigationModule.init(STATE.AISLE_DOWN, instructions, starting_instruction)
 		elif pipeline == "pcontrol":
 			NavigationModule.init(STATE.VEGETABLE, instructions, starting_instruction)
 		t1 = time.time()
