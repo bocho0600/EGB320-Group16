@@ -4,7 +4,7 @@ from math import pi
 SCREEN_WIDTH = 410
 SCREEN_HEIGHT = 308
 
-is_simulator = False	
+is_simulator = True	
 is_hitl = False
 is_video = False
 is_combined = False
