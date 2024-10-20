@@ -692,7 +692,7 @@ class NavigationModule:
 				cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 4:
 			# Close gripper
-			Specific.gripper_close()
+			Specific.gripper_close(2.5)
 
 			if cls.target_bay != 3:
 				cls.set_velocity(-2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.22)
@@ -707,9 +707,9 @@ class NavigationModule:
 			if PathProcess.completed:
 				if cls.target_bay != 3:
 					if cls.target_side == 'Right':
-						cls.set_velocity(0,cls.MAX_ROBOT_ROT, rotlen=2*pi/3)
+						cls.set_velocity(0,cls.MAX_ROBOT_ROT, rotlen=pi/2)
 					else:
-						cls.set_velocity(0,-cls.MAX_ROBOT_ROT, rotlen=2*pi/3)
+						cls.set_velocity(0,-cls.MAX_ROBOT_ROT, rotlen=pi/2)
 				else:
 					if cls.target_side == 'Right':
 						cls.set_velocity(0,cls.MAX_ROBOT_ROT, rotlen=pi)
