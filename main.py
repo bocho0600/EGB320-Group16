@@ -20,7 +20,7 @@ def main(): # Main function
 		Specific.start()
 		
 		VisionModule.calculate_projection_transform()
-		starting_instruction = 3
+		starting_instruction = 2
 
 		
 		pipeline = 'nav'

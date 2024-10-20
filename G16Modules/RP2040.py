@@ -134,3 +134,18 @@ class I2C:
             cls.SetMotor(2, -right_speed)
             cls.prev_right_speed = right_speed
 
+    @classmethod
+    def PlaySong(cls, status):
+        # Validate inputs
+
+        if status not in ["0", "1"]:
+            print("Invalid song status. Please choose between 0, 1.")
+            return
+        command = f"N{status}"
+        #print(f"Sending command to motor: {command}")
+        try:
+            # Send the command to the Arduino
+            ascii_array = cls.string_to_ascii_array(command)
+            cls.bus.write_i2c_block_data(cls.addr, 0, ascii_array)
+        except Exception as e:
+            print(f"Error sending song command: {e}")

@@ -832,6 +832,7 @@ class NavigationModule:
 		return STATE.APPROACH_PACKING, debug_img
 
 
+	completed_items = 0
 
 	@classmethod
 	def DROP_ITEM_start(cls):
@@ -886,14 +887,19 @@ class NavigationModule:
 		elif cls.drop_item_stage == 3:
 			# Turn around
 			if PathProcess.completed:
-				cls.current_phase = PHASE.COLLECT
-				cls.current_instruction = (cls.current_instruction % (len(cls.instructions)-1)) + 1
-				cls.process_instruction()
+				if cls.completed_items >= 3:
+					Specific.play_song()
+					return STATE.VEGETABLE, debug_img
+				else:
+					cls.completed_items += 1
+					cls.current_phase = PHASE.COLLECT
+					cls.current_instruction = (cls.current_instruction % (len(cls.instructions)-1)) + 1
+					cls.process_instruction()
 
-				# cls.avoid_dist = 0.4
-				# cls.next_state = STATE.LOST
-				# return STATE.AVOID_MOVE, debug_img
-				return STATE.LOST, debug_img
+					# cls.avoid_dist = 0.4
+					# cls.next_state = STATE.LOST
+					# return STATE.AVOID_MOVE, debug_img
+					return STATE.LOST, debug_img
 
 		return STATE.DROP_ITEM, debug_img
 
