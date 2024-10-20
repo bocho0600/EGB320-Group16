@@ -684,13 +684,40 @@ class NavigationModule:
 			# Lower item collection
 			# Not implemented
 			Specific.lifter_set(cls.target_height)
-			cls.set_velocity(2*cls.MAX_ROBOT_VEL/3,0,fwdlen=0.27)
+			cls.fwd_start = time.time()
 			cls.collect_item_stage += 1
 		elif cls.collect_item_stage == 3:
 			# Move forward
-			if PathProcess.completed:
+
+
+			if cls.checkContour(visout.contoursItem):
+				def item_center_x(cont):
+						x, y, w, h = cv2.boundingRect(cont)
+						return x + w/2
+
+				largest_item = min(visout.contoursItem, key=lambda cont:abs(item_center_x(cont) - SCREEN_WIDTH/2))
+
+				x, y, w, h = cv2.boundingRect(largest_item)
+				cx = x + w/2
+
+				if debug_img is not None:
+					cv2.drawMarker(debug_img, (int(cx), int(y+h/2)), (255,151,0), cv2.MARKER_STAR, 12)
+
+				bearing = (cx - SCREEN_WIDTH/2) * FOV_HORIZONTAL/SCREEN_WIDTH
+			else:
+				bearing = 0
+			
+			bearing = bearing - 8*pi
+
+			if time.time() - cls.fwd_start >= 3.0:
 				cls.set_velocity(0,0)
 				cls.collect_item_stage += 1
+			else:
+				speed = cls.Kp2 * bearing
+				if abs(speed) < cls.MIN_ROTATION:
+					speed = math.copysign(cls.MIN_ROTATION, speed)
+				cls.set_velocity(0, cls.Kp2 * bearing, rotlen=abs(bearing))
+				
 		elif cls.collect_item_stage == 4:
 			# Close gripper
 			Specific.gripper_close(2.5)
