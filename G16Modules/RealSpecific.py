@@ -126,7 +126,7 @@ class RealSpecific:
 
 	@classmethod
 	def play_song(cls):
-		I2C.PlaySong(1)
+		I2C.PlaySong('1')
 
 
 

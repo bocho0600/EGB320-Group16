@@ -131,7 +131,7 @@ class I2C:
             cls.SetMotor(1, left_speed)
             cls.prev_left_speed = left_speed
         if cls.prev_right_speed != right_speed:  # If the speed is different from the remembered speed 
-            cls.SetMotor(2, -right_speed)
+            cls.SetMotor(2, right_speed)
             cls.prev_right_speed = right_speed
 
     @classmethod
@@ -142,7 +142,7 @@ class I2C:
             print("Invalid song status. Please choose between 0, 1.")
             return
         command = f"N{status}"
-        #print(f"Sending command to motor: {command}")
+        print(f"Playing the song...: {command}")
         try:
             # Send the command to the Arduino
             ascii_array = cls.string_to_ascii_array(command)
