@@ -18,11 +18,12 @@ class CSVReader:
     def read_csv(self):
         with open(self.file_name, mode="r", encoding='utf-8-sig') as csv_file:
             self.item_info = list(csv.reader(csv_file))
-            for row in self.item_info:
-                print(row)  # This line can be removed if you don't need to print each row
+            # for row in self.item_info:
+            #     print(row)  # This line can be removed if you don't need to print each row
         return self.item_info
     
     def RobotInstruction(self):
+        robot_instruction2 = []
         for row in self.item_info[1:]:  # Skip the header row
             if row[1] in ["0", "1"]:
                 aisle = '1'
@@ -37,9 +38,35 @@ class CSVReader:
                 continue  # Skip rows that do not match any of the conditions
 
             # Append the transformed row to robot_instruction
-            self.robot_instruction.append([aisle, row[2], side, row[3], row[4]])
+            robot_instruction2.append([aisle, row[2], side, row[3], row[4]])
+        
 
-        print("Robot Instructions:")
+        print("Robot Instructions Before:")
+        for instruction in self.robot_instruction:
+            print(instruction)
+        for instruction in robot_instruction2:
+            print(instruction)
+
+        # Now we do this to order the priority:
+        # Sort by item difficulty
+        # Move aisle 1 to the bottom
+        # Select the first from each aisle
+        # Order be descending row number
+        def item_difficulty(row):
+            item = row[4]
+            if item == "Cube" or item == "Bottle" or item == "Mug":
+                return 1 # easy
+            else:
+                return 2 # hard
+
+        robot_instruction2 = sorted(robot_instruction2, key = item_difficulty)
+        robot_instruction2 = [r for r in robot_instruction2 if r[0] != '1'] + [r for r in robot_instruction2 if r[0] == '1']
+        robot_instruction2 = [next(r for r in robot_instruction2 if r[3] == '0'), next(r for r in robot_instruction2 if r[3] == '1'), next(r for r in robot_instruction2 if r[3] == '2')]
+        robot_instruction2 = sorted(robot_instruction2, key = lambda r:r[0], reverse=True)
+
+        self.robot_instruction = self.robot_instruction + robot_instruction2
+
+        print("Robot Instructions After:")
         for instruction in self.robot_instruction:
             print(instruction)
         
