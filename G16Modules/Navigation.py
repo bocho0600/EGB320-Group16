@@ -450,7 +450,7 @@ class NavigationModule:
 			# This is the main section we need to tweak to not crash into the shelf
 			# Consider using the corner angle to inform the stopping distance (we have that info in visout!)
 			if distance is not None and ((cls.target_aisle == 1 and distance <= 0.46) or\
-				(cls.target_aisle == 2 and distance <= 1.17) or\
+				(cls.target_aisle == 2 and distance <= 1.25) or\
 				(cls.target_aisle == 3 and ((cls.last_target_aisle >= 2 and distance <= 0.55) or
 											(cls.last_target_aisle < 2 and distance <= 0.46)))):
 				if visout.detected_shelves[0][0] > SCREEN_WIDTH/2:
@@ -471,7 +471,7 @@ class NavigationModule:
 				cls.set_velocity(0,0)
 				time.sleep(0.5)
 				return STATE.AISLE_DOWN, debug_img
-			elif len(visout.detected_shelves) >= 2:
+			elif visout.detected_shelves is not None and len(visout.detected_shelves) >= 2:
 				if cls.aisle_dir == 0:
 					# shelf is on the right
 					cls.set_velocity(0, cls.MAX_ROBOT_ROT * 0.7)
@@ -726,7 +726,7 @@ class NavigationModule:
 				cls.collect_item_stage += 1
 			else:
 				fwd, rot = cls.move_into_path(bearing, debug_img, visout.obstacles)
-				cls.set_velocity(0.8*fwd, rot)
+				cls.set_velocity(fwd, rot)
 				
 		elif cls.collect_item_stage == 4:
 			# Close gripper

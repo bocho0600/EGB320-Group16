@@ -23,7 +23,7 @@ def main(): # Main function
 		starting_instruction = 2
 
 		
-		pipeline = 'debug'
+		pipeline = 'nav'
 		draw = True
 
 		
