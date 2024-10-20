@@ -48,7 +48,7 @@ class NavigationModule:
 		MAX_ROBOT_ROT = pi/4 # rad/s
 		RADIUS = 0.20 # how far to stay away from wall
 		MIN_ROTATION = 1.0
-		ITEM_BIAS = 2. * pi/180
+		ITEM_BIAS = 0.0
 
 	@classmethod
 	def set_velocity(cls, fwd, rot, delta=0, fwdlen=None, rotlen=None):
@@ -806,7 +806,7 @@ class NavigationModule:
 
 			if visout.detected_shelves is None:
 				cls.next_state = STATE.APPROACH_PACKING
-				cls.avoid_dist = 0.25 + 0.1 * cls.target_aisle
+				cls.avoid_dist = 0.20 + 0.03 * cls.target_aisle
 				return STATE.AVOID_MOVE, debug_img
 
 
@@ -877,6 +877,7 @@ class NavigationModule:
 	def DROP_ITEM_start(cls):
 		Specific.leds(0b001)
 		cls.drop_item_stage = 0
+		cls.drop_start = time.time()
 		cls.set_velocity(1.1*cls.MAX_ROBOT_VEL,0)#,fwdlen=0.60) go until we can't see marker
 	
 	@classmethod
@@ -887,14 +888,14 @@ class NavigationModule:
 
 		if cls.drop_item_stage == 0:
 			# Move forward
-			if PathProcess.completed or (visout.marker_bearing is not None and visout.marker_distance/100 <= desired_marker_dist):
+			if PathProcess.completed or (visout.marker_bearing is not None and visout.marker_distance/100 <= desired_marker_dist) or time.time() - cls.drop_start >= 8.0:
 				cls.set_velocity(0,0)
 				cls.drop_item_stage = 2
 			else:
 				if visout.marker_bearing is not None:
 					fwd, rot = cls.move_into_path(visout.marker_bearing, debug_img, visout.obstacles)
 					dist = visout.marker_distance/100 - desired_marker_dist
-					cls.set_velocity(fwd*1.2, rot*1.2, fwdlen=dist)
+					cls.set_velocity(fwd*1.4, rot*1.4, fwdlen=dist)
 				else:
 					pass
 				

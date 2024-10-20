@@ -54,9 +54,9 @@ class CSVReader:
         # Order be descending row number
         # def item_difficulty(row):
         #     item = row[4]
-        #     if item == "Cube" or item == "Bottle" or item == "Mug":
+        #     if item == "Cube" or item == "Mug":
         #         return 1 # easy
-        #     elif item == "Weetbots":
+        #     elif item == "Weetbots"or item == "Bottle":
         #         return 3 # hard
         #     else:
         #         return 2

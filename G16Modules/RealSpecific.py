@@ -117,11 +117,11 @@ class RealSpecific:
 		ItemCollectionModule.gripper_stop()
 	
 	@classmethod
-	def gripper_close(cls, seconds=1.5):
+	def gripper_close(cls, seconds=2.0):
 		ItemCollectionModule.gripper_close(seconds)
 	
 	@classmethod
-	def gripper_open(cls, seconds=1.5):
+	def gripper_open(cls, seconds=1.7):
 		ItemCollectionModule.gripper_open(seconds)
 
 	@classmethod

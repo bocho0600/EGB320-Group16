@@ -15,7 +15,7 @@ class ItemCollectionModule:
     @classmethod
     def init(cls):
         cls.gripper_close(2.5)
-        cls.gripper_open(1.5)
+        cls.gripper_open(1.7)
         cls.stop_all()
 
     @classmethod
