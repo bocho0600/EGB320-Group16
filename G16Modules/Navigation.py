@@ -707,7 +707,7 @@ class NavigationModule:
 			else:
 				bearing = 0
 			
-			bearing = bearing - 8*pi
+			bearing = bearing - 8*pi/180
 
 			if time.time() - cls.fwd_start >= 3.0:
 				cls.set_velocity(0,0)
